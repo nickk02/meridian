@@ -74,12 +74,30 @@ function confidenceFor(source: string, ts: number, now: number): number {
   return Math.round(reliability * recency * 1000) / 1000;
 }
 
+// Only accept http(s) URLs, so a feed cannot inject a javascript: scheme that
+// would execute when rendered as a link (anti-XSS).
+function safeHttpUrl(u: unknown): string | null {
+  if (typeof u !== "string") return null;
+  try {
+    const parsed = new URL(u);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function sourceUrlFor(o: IngestObject): string | null {
   const p = o.props ?? {};
-  const fromProps = p["url"] ?? p["report"] ?? p["advisory"];
-  if (typeof fromProps === "string") return fromProps;
-  if (o.source_url) return o.source_url;
-  return SOURCE_URL[o.source] ?? null;
+  return (
+    safeHttpUrl(p["url"]) ??
+    safeHttpUrl(p["report"]) ??
+    safeHttpUrl(p["advisory"]) ??
+    safeHttpUrl(o.source_url) ??
+    SOURCE_URL[o.source] ??
+    null
+  );
 }
 
 // Fast-moving sources whose stale positions are misleading: pruned aggressively

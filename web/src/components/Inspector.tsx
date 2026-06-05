@@ -117,7 +117,7 @@ export function Inspector({ selectedId, typeMap, onSelect, onActed }: Props) {
           <div className="mer-kv">
             <span>SOURCE</span>
             <span className="mer-mono">
-              {detail.object.source_url ? (
+              {detail.object.source_url && /^https?:\/\//i.test(detail.object.source_url) ? (
                 <a href={detail.object.source_url} target="_blank" rel="noreferrer" className="mer-prov-link">
                   {detail.object.source ?? "source"}
                 </a>
