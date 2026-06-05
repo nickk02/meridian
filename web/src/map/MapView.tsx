@@ -5,9 +5,19 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { FeatureCollection, Feature } from "geojson";
 import type { OntologyObject, OntologyLink } from "../../../shared/types";
 import { isValidCoord } from "../../../shared/coords";
+import { MapboxOverlay } from "@deck.gl/mapbox";
+import type { Layer } from "@deck.gl/core";
+import { ScatterplotLayer, PathLayer } from "@deck.gl/layers";
 import { darkBasemap } from "./style";
 import { addMapIcons, ICON_IMAGE } from "./icons";
-import { fetchSats, propagateSats, type Sat } from "./satellites";
+import {
+  fetchSats,
+  propagateSatsRaw,
+  orbitArcs,
+  type Sat,
+  type SatPoint,
+  type OrbitArc,
+} from "./satellites";
 import { fetchAis } from "./ais";
 import { fetchAircraft } from "./aircraft";
 import { computeTerminator } from "./terminator";
@@ -197,6 +207,15 @@ function applyGlobeSky(map: maplibregl.Map) {
   });
 }
 
+// Number of low-orbit satellites whose full orbital arc is drawn at once. Capped
+// so the globe shows several orbit rings, not a spaghetti of every track.
+const ORBIT_CAP = 26;
+
+const escapeHtml = (s: string) =>
+  s.replace(/[&<>"']/g, (ch) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch] as string,
+  );
+
 export function MapView(props: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -211,7 +230,86 @@ export function MapView(props: Props) {
   const satsOn = props.satsOn;
   const shipsOn = props.shipsOn;
   const planesOn = props.planesOn;
+  const satsOnRef = useRef(satsOn);
+  satsOnRef.current = satsOn;
   const satsRef = useRef<Sat[]>([]);
+  // deck.gl overlay (3D altitude layers) + its data, kept in refs so the
+  // animation tick and the React effects can rebuild the layers cheaply.
+  const deckRef = useRef<MapboxOverlay | null>(null);
+  const satPointsRef = useRef<SatPoint[]>([]);
+  const orbitsRef = useRef<OrbitArc[]>([]);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
+
+  // Shared identity popup for live overlays (used by both the MapLibre click
+  // hit-test and deck.gl picking, so satellites lifted into deck still click).
+  const showPopup = useCallback((lngLat: [number, number] | maplibregl.LngLat, kind: string, text: string) => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!popupRef.current) {
+      popupRef.current = new maplibregl.Popup({ closeButton: true, closeOnClick: false, className: "mer-map-popup", maxWidth: "240px" });
+    }
+    popupRef.current
+      .setLngLat(lngLat)
+      .setHTML(`<span class="mer-popup-kind">${kind}</span><span class="mer-popup-name">${escapeHtml(text)}</span>`)
+      .addTo(map);
+  }, []);
+
+  // Rebuild the deck.gl altitude layers from the current satellite data. Sats are
+  // rendered at true orbital altitude on the globe; on the flat (analysis) view
+  // the altitude collapses to the surface so it degrades cleanly.
+  const buildDeck = useCallback(() => {
+    const overlay = deckRef.current;
+    if (!overlay) return;
+    const layers: Layer[] = [];
+    if (satsOnRef.current) {
+      const onGlobe = globeRef.current;
+      const altScale = onGlobe ? 1 : 0;
+      if (onGlobe && orbitsRef.current.length) {
+        layers.push(
+          new PathLayer<OrbitArc>({
+            id: "sat-orbits",
+            data: orbitsRef.current,
+            getPath: (d) => d.path,
+            getColor: [96, 206, 232, 64],
+            getWidth: 1.2,
+            widthUnits: "pixels",
+            widthMinPixels: 1,
+            jointRounded: true,
+            capRounded: true,
+            // Test against the globe's depth so back-of-globe arcs are occluded;
+            // do not write depth (translucent overlapping arcs blend cleanly).
+            parameters: { depthCompare: "less-equal", depthWriteEnabled: false },
+            pickable: false,
+          }),
+        );
+      }
+      layers.push(
+        new ScatterplotLayer<SatPoint>({
+          id: "sat-points",
+          data: satPointsRef.current,
+          getPosition: (d) => [d.lon, d.lat, d.altKm * 1000 * altScale],
+          getRadius: 2.4,
+          radiusUnits: "pixels",
+          radiusMinPixels: 1.5,
+          getFillColor: [234, 246, 255, 235],
+          stroked: true,
+          getLineColor: [120, 200, 240, 170],
+          lineWidthUnits: "pixels",
+          lineWidthMinPixels: 0.5,
+          pickable: true,
+          parameters: { depthCompare: "less-equal" },
+          onClick: (info) => {
+            const d = info.object as SatPoint | undefined;
+            if (!d) return false;
+            showPopup([d.lon, d.lat], "SATELLITE", `${d.name}${Number.isFinite(d.altKm) ? ` · ${Math.round(d.altKm)} km` : ""}`);
+            onSelectRef.current(null);
+            return true;
+          },
+        }),
+      );
+    }
+    overlay.setProps({ layers });
+  }, [showPopup]);
 
   // Init once.
   useEffect(() => {
@@ -394,39 +492,8 @@ export function MapView(props: Props) {
         },
       });
 
-      // Satellites: live sub-satellite points, propagated client-side and
-      // updated on an interval. A faint trailing glow plus a small bright core.
-      map.addSource("sats", { type: "geojson", data: emptyFc() });
-      map.addLayer({
-        id: "sats-glow",
-        type: "circle",
-        source: "sats",
-        paint: {
-          "circle-color": "#a9e6ff",
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 3.5, 6, 6] as ExpressionSpecification,
-          "circle-blur": 1,
-          "circle-opacity": 0.25,
-        },
-      });
-      map.addLayer({
-        id: "sats",
-        type: "symbol",
-        source: "sats",
-        layout: {
-          "icon-image": "ic-SATELLITE",
-          // Pinprick-sized at world view so hundreds of sats read as points, not
-          // a glyph wall; the satellite shape resolves as you zoom in.
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.16, 4, 0.42, 8, 0.7] as ExpressionSpecification,
-          "icon-allow-overlap": true,
-          "icon-ignore-placement": true,
-        },
-        paint: {
-          "icon-color": "#eaf6ff",
-          "icon-halo-color": "#0a1622",
-          "icon-halo-width": 1.1,
-          "icon-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.7, 4, 0.95] as ExpressionSpecification,
-        },
-      });
+      // Satellites are rendered in 3D at true orbital altitude by the deck.gl
+      // overlay (created below), not as a flat MapLibre layer.
 
       // Live global AIS vessels (overlay; refreshed by polling the collector DO).
       // There are thousands, so at low zoom they stay small dots (cheap, and the
@@ -508,22 +575,9 @@ export function MapView(props: Props) {
       // One click handler for everything, via queryRenderedFeatures with a pixel
       // buffer (per-layer click events are unreliable on the globe projection, so
       // we hit-test ourselves; the buffer makes tiny dots easy to hit). Ontology
-      // objects open the inspector; live overlays (aircraft, ships, satellites)
-      // are not ontology objects, so they get a lightweight identity popup.
-      const escapeHtml = (s: string) =>
-        s.replace(/[&<>"']/g, (ch) =>
-          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch] as string,
-        );
-      let popup: maplibregl.Popup | null = null;
-      const overlayPopup = (lngLat: maplibregl.LngLat, kind: string, text: string) => {
-        if (!popup) {
-          popup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, className: "mer-map-popup", maxWidth: "240px" });
-        }
-        popup
-          .setLngLat(lngLat)
-          .setHTML(`<span class="mer-popup-kind">${kind}</span><span class="mer-popup-name">${escapeHtml(text)}</span>`)
-          .addTo(map);
-      };
+      // objects open the inspector; live overlays (aircraft, ships) get a
+      // lightweight identity popup. Satellites are deck.gl objects, so they are
+      // picked by deck (see buildDeck), not here.
       const BUF = 5;
       const boxAt = (x: number, y: number): [[number, number], [number, number]] => [
         [x - BUF, y - BUF],
@@ -540,20 +594,13 @@ export function MapView(props: Props) {
         if (plane) {
           const m = plane.properties?.["model"];
           const alt = plane.properties?.["alt"];
-          overlayPopup(e.lngLat, "AIRCRAFT", `${plane.properties?.["name"] ?? "unknown"}${m ? ` · ${m}` : ""}${alt ? ` · ${alt} ft` : ""}`);
+          showPopup(e.lngLat, "AIRCRAFT", `${plane.properties?.["name"] ?? "unknown"}${m ? ` · ${m}` : ""}${alt ? ` · ${alt} ft` : ""}`);
           onSelectRef.current(null);
           return;
         }
         const ship = map.queryRenderedFeatures(box, { layers: ["ais"] })[0];
         if (ship) {
-          overlayPopup(e.lngLat, "VESSEL", String(ship.properties?.["name"] ?? "unknown"));
-          onSelectRef.current(null);
-          return;
-        }
-        const sat = map.queryRenderedFeatures(box, { layers: ["sats"] })[0];
-        if (sat) {
-          const alt = sat.properties?.["alt"];
-          overlayPopup(e.lngLat, "SATELLITE", `${sat.properties?.["name"] ?? "unknown"}${alt != null ? ` · ${alt} km` : ""}`);
+          showPopup(e.lngLat, "VESSEL", String(ship.properties?.["name"] ?? "unknown"));
           onSelectRef.current(null);
           return;
         }
@@ -562,13 +609,21 @@ export function MapView(props: Props) {
       // Pointer cursor over any clickable feature.
       map.on("mousemove", (e) => {
         const over = map.queryRenderedFeatures(boxAt(e.point.x, e.point.y), {
-          layers: ["objects", "objects-symbols", "aircraft", "ais", "ais-symbols", "sats"],
+          layers: ["objects", "objects-symbols", "aircraft", "ais", "ais-symbols"],
         }).length > 0;
         map.getCanvas().style.cursor = over ? "pointer" : "";
       });
 
+      // deck.gl overlay for the 3D altitude layers, interleaved so it composites
+      // with the globe (back-of-globe sats are occluded by the earth via the
+      // shared depth buffer).
+      const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
+      map.addControl(overlay as unknown as maplibregl.IControl);
+      deckRef.current = overlay;
+
       readyRef.current = true;
       syncData();
+      buildDeck();
 
       // Apply the zoom floor. On globe, wait out the fly-in (which starts from
       // deep space at zoom 0.2) before clamping, so the intro still plays.
@@ -612,43 +667,41 @@ export function MapView(props: Props) {
 
   useEffect(syncData);
 
-  // Load TLEs once on mount, refresh hourly. Stored in a ref so the animation
-  // loop reads the latest without re-subscribing.
+  // Load TLEs once on mount, refresh hourly. Also precompute the orbital arcs for
+  // the capped low-orbit subset (they barely change over minutes), so the per-2s
+  // tick only has to repropagate the live points.
   useEffect(() => {
     let alive = true;
-    const load = () => fetchSats().then((s) => { if (alive) satsRef.current = s; });
+    const load = () =>
+      fetchSats().then((s) => {
+        if (!alive) return;
+        satsRef.current = s;
+        orbitsRef.current = orbitArcs(s, new Date(), ORBIT_CAP);
+        satPointsRef.current = propagateSatsRaw(s, new Date());
+        buildDeck();
+      });
     load();
     const id = window.setInterval(load, 3600_000);
     return () => {
       alive = false;
       window.clearInterval(id);
     };
-  }, []);
+  }, [buildDeck]);
 
-  // Animate sub-satellite points (propagate to "now" every 2s) and toggle the
-  // layer visibility with satsOn.
+  // Repropagate the live satellite points every 2s and rebuild the deck.gl
+  // layers. Toggling satsOn rebuilds (the ref drives show/hide inside buildDeck).
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    const vis = satsOn ? "visible" : "none";
-    const apply = () => {
-      if (!map.getLayer("sats")) return;
-      map.setLayoutProperty("sats", "visibility", vis);
-      map.setLayoutProperty("sats-glow", "visibility", vis);
-    };
-    if (readyRef.current) apply();
-    else map.once("load", apply);
+    buildDeck();
     if (!satsOn) return;
     const tick = () => {
-      if (!readyRef.current || satsRef.current.length === 0) return;
-      (map.getSource("sats") as GeoJSONSource | undefined)?.setData(
-        propagateSats(satsRef.current, new Date()),
-      );
+      if (satsRef.current.length === 0) return;
+      satPointsRef.current = propagateSatsRaw(satsRef.current, new Date());
+      buildDeck();
     };
     tick();
     const id = window.setInterval(tick, 2000);
     return () => window.clearInterval(id);
-  }, [satsOn]);
+  }, [satsOn, buildDeck]);
 
   // Poll the live AIS snapshot and toggle the vessel layer with shipsOn.
   useEffect(() => {
@@ -788,7 +841,9 @@ export function MapView(props: Props) {
       map.setMinZoom(MIN_ZOOM_FLAT);
       map.easeTo({ bearing: HOME.bearing, pitch: HOME.pitch, duration: 800 });
     }
-  }, [globe]);
+    // Rebuild deck so satellite altitude lifts on globe and collapses on flat.
+    buildDeck();
+  }, [globe, buildDeck]);
 
   const resetView = () => {
     const map = mapRef.current;
