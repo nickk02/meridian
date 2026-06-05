@@ -5,7 +5,13 @@
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
-    "enabled": true
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true
+    }
   },
   // The SPA build output. The Worker runs first for any path that is not a
   // built asset; for non /api paths the Worker forwards to ASSETS, which
