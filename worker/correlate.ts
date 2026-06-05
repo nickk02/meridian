@@ -26,7 +26,28 @@ interface EvtPt {
   lon: number;
   ts: number;
   severity: number;
+  mag?: number | null; // earthquake magnitude (SEISMIC only); null for others
 }
+
+// Canonical domain per clustered type, so an incident's domain label is derived
+// from what it IS, not from a possibly-stale stored domain (some USGS quakes
+// linger in D1 tagged "other"). Used for the single-type incident label.
+const TYPE_DOMAIN: Record<string, string> = {
+  SEISMIC: "seismic",
+  VOLCANO: "seismic",
+  WILDFIRE: "environmental",
+  FLOOD: "environmental",
+  DROUGHT: "environmental",
+  STORM: "environmental",
+  ALERT: "environmental",
+  ICE: "environmental",
+};
+
+// SEISMIC anchors must clear this magnitude, so background micro-seismicity
+// (The Geysers, Permian Basin, the daily M<2 noise) cannot seed an incident.
+// Aftershocks below it still join as members, collapsing a sequence into one
+// line. GDACS quakes carry no mag but are disaster-level, so they pass.
+const SEISMIC_MIN_MAG = 2.5;
 
 // The clustering method's identity, used BOTH as the algorithm's name and as the
 // link basis token, so the persisted basis can never drift from the method that
@@ -51,7 +72,10 @@ interface TypeParam {
 // 2*eps, so a tight eps is the structural guard against sprawl. SEISMIC is the
 // tightest because micro-seismicity is the densest background.
 const TYPE_PARAMS: Record<string, TypeParam> = {
-  SEISMIC: { epsKm: 35, epsHr: 24, minPts: 4 },
+  // Wider time window so a multi-day aftershock sequence collapses into ONE
+  // incident; eps covers the rupture + aftershock zone. The mag floor (not eps)
+  // is what kills micro-seismicity noise.
+  SEISMIC: { epsKm: 50, epsHr: 72, minPts: 3 },
   WILDFIRE: { epsKm: 40, epsHr: 168, minPts: 3 },
   FLOOD: { epsKm: 60, epsHr: 120, minPts: 3 },
   ALERT: { epsKm: 60, epsHr: 12, minPts: 3 },
@@ -120,12 +144,16 @@ export function computeIncidents(events: EvtPt[]): Incident[] {
   for (const [type, pts] of byType) {
     const param = TYPE_PARAMS[type];
     const n = pts.length;
-    // Anchor-selection order: strongest, then earliest, then id (a total order).
+    const isSeismic = type === "SEISMIC";
+    // Strength used to pick the anchor: earthquake magnitude for SEISMIC (a
+    // GDACS quake has no mag but is disaster-level, so treat null as high),
+    // otherwise severity. Anchor = strongest, then earliest, then id.
+    const strength = (e: EvtPt) => (isSeismic ? (e.mag ?? 99) : e.severity);
     const order = pts
       .map((_, i) => i)
       .sort(
         (a, b) =>
-          pts[b].severity - pts[a].severity ||
+          strength(pts[b]) - strength(pts[a]) ||
           pts[a].ts - pts[b].ts ||
           (pts[a].id < pts[b].id ? -1 : pts[a].id > pts[b].id ? 1 : 0),
       );
@@ -156,13 +184,17 @@ export function computeIncidents(events: EvtPt[]): Incident[] {
         members.push({ idx: j, km, dtHr: dt / 3600_000 });
       }
       if (members.length < param.minPts) continue; // not a cluster; anchor stays free
-      for (const m of members) taken[m.idx] = true;
       const pm = members.map((m) => pts[m.idx]);
+      // Magnitude floor: a seismic cluster must contain a real quake (M>=2.5, or
+      // a GDACS disaster quake), else it is background micro-seismicity. The
+      // anchor leaves itself free so a genuine anchor elsewhere can still use it.
+      if (isSeismic && !pm.some((m) => (m.mag ?? 99) >= SEISMIC_MIN_MAG)) continue;
+      for (const m of members) taken[m.idx] = true;
       incidents.push({
         id: `INC-${type}-${a.id}`,
         type,
         label: `${type[0] + type.slice(1).toLowerCase()} cluster: ${a.name} +${members.length - 1}`,
-        domain: a.domain,
+        domain: TYPE_DOMAIN[type] ?? a.domain,
         centroid_lat: round(pm.reduce((s, m) => s + m.lat, 0) / pm.length, 4),
         centroid_lon: round(pm.reduce((s, m) => s + m.lon, 0) / pm.length, 4),
         t_start: Math.min(...pm.map((m) => m.ts)),
@@ -177,13 +209,34 @@ export function computeIncidents(events: EvtPt[]): Incident[] {
   return incidents;
 }
 
-// Cross-domain correlation: events of DIFFERENT types that co-occur in space and
-// time AND have a plausible shared mechanism. Naive proximity is coincidence (a
-// wildfire near a quake swarm means nothing), so membership is gated to an
-// explicit co-causal whitelist. A group surfaces only when it spans 2+ types.
-// The human judges real-versus-coincidence from the members and their bases.
-const CROSS_PARAM = { epsKm: 100, minPts: 2 };
+// Cross-domain correlation: a spatiotemporal cluster that spans 2+ DOMAINS, by
+// either of two plausible relationships (never naive proximity, which is
+// coincidence). 1) Cross-feed: the SAME event reported by independent feeds in
+// different domains (a GDACS disaster quake and the USGS seismic cluster for it)
+// is real corroboration. Tight radius. 2) Cross-kind: DIFFERENT event types with
+// a shared mechanism (a volcano and its quakes, a drought and the fires in it),
+// gated to the co-causal whitelist. Wider radius. The human judges from the
+// members and their bases.
+const CROSS_SAME_KM = 120; // same-type cross-feed: the same event, close
+const CROSS_KIND_KM = 250; // co-causal cross-kind: regional (a drought's fires)
 const CROSS_TYPES = new Set(["STORM", "FLOOD", "ALERT", "VOLCANO", "SEISMIC", "WILDFIRE", "DROUGHT"]);
+
+// How long the same phenomenon can be reported apart by two feeds and still be
+// the same event (the disaster feed lags the detail feed; long-lived hazards
+// like fires/droughts span weeks).
+const SAME_TYPE_WINDOW_HR: Record<string, number> = {
+  SEISMIC: 72,
+  VOLCANO: 720,
+  WILDFIRE: 720,
+  DROUGHT: 720,
+  STORM: 168,
+  FLOOD: 168,
+  ALERT: 48,
+};
+
+// Repair the stale "other" domain (some USGS quakes linger mislabeled) so it
+// cannot manufacture a false cross-domain pair against a correctly-tagged one.
+const correctedDomain = (e: EvtPt) => (e.domain === "other" ? (TYPE_DOMAIN[e.type] ?? "other") : e.domain);
 
 // The plausible-shared-mechanism check, returning the TIME WINDOW (hours) the two
 // events may be apart and still be related, or 0 if there is no mechanism. The
@@ -232,7 +285,8 @@ export function computeCrossDomain(events: EvtPt[]): CrossIncident[] {
   const pts = events.filter(
     (e) => CROSS_TYPES.has(e.type) && !(e.type === "WILDFIRE" && /prescribed|\brx[\s-]/i.test(e.name)),
   );
-  const p = CROSS_PARAM;
+  // Anchor strongest-first; a present GDACS disaster event (which seeds the
+  // cross-feed corroborations) outranks a raw detection.
   const order = pts
     .map((_, i) => i)
     .sort(
@@ -243,7 +297,7 @@ export function computeCrossDomain(events: EvtPt[]): CrossIncident[] {
     );
   const latOrder = pts.map((_, i) => i).sort((a, b) => pts[a].lat - pts[b].lat);
   const lats = latOrder.map((i) => pts[i].lat);
-  const degBand = p.epsKm / 110;
+  const degBand = CROSS_KIND_KM / 110;
   const taken = new Array(pts.length).fill(false);
 
   const out: CrossIncident[] = [];
@@ -257,19 +311,25 @@ export function computeCrossDomain(events: EvtPt[]): CrossIncident[] {
       const j = latOrder[q];
       if (j === ai || taken[j]) continue;
       const b = pts[j];
-      const winHr = coCausalWindowHr(a, b);
+      // Same type = cross-feed (tight); different type = co-causal cross-kind.
+      const sameType = a.type === b.type;
+      const winHr = sameType ? (SAME_TYPE_WINDOW_HR[a.type] ?? 0) : coCausalWindowHr(a, b);
       if (winHr <= 0) continue;
+      const maxKm = sameType ? CROSS_SAME_KM : CROSS_KIND_KM;
       const dt = Math.abs(a.ts - b.ts);
       if (dt > winHr * 3600_000) continue;
       const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
-      if (km > p.epsKm) continue;
+      if (km > maxKm) continue;
       members.push({ idx: j, km, dtHr: dt / 3600_000 });
     }
-    if (members.length < p.minPts) continue;
-    const types = [...new Set(members.map((m) => pts[m.idx].type))];
-    if (types.length < 2) continue; // must be genuinely cross-type
+    if (members.length < 2) continue;
+    const pmAll = members.map((m) => pts[m.idx]);
+    // Must span 2+ corrected domains to be a cross-domain incident.
+    if (new Set(pmAll.map(correctedDomain)).size < 2) continue;
     for (const m of members) taken[m.idx] = true;
     const pm = members.map((m) => pts[m.idx]);
+    const types = [...new Set(pm.map((m) => m.type))];
+    const domains = [...new Set(pm.map(correctedDomain))];
     out.push({
       id: `XINC-${a.id}`,
       label: `${a.name} + ${members.length - 1}`,
@@ -282,11 +342,11 @@ export function computeCrossDomain(events: EvtPt[]): CrossIncident[] {
       type_count: types.length,
       severity_max: Math.max(...pm.map((m) => m.severity)),
       types,
-      domains: [...new Set(pm.map((m) => m.domain))],
+      domains,
       members: members.map((m) => ({
         id: pts[m.idx].id,
         name: pts[m.idx].name,
-        domain: pts[m.idx].domain,
+        domain: correctedDomain(pts[m.idx]),
         type: pts[m.idx].type,
         severity: pts[m.idx].severity,
         km: round(m.km, 1),
@@ -308,7 +368,8 @@ export async function correlate(
   const placeholders = fetchTypes.map(() => "?").join(",");
   const { results } = await db
     .prepare(
-      `SELECT id, type, domain, name, lat, lon, ts, severity FROM objects
+      `SELECT id, type, domain, name, lat, lon, ts, severity,
+              json_extract(props, '$.mag') AS mag FROM objects
         WHERE type IN (${placeholders})`,
     )
     .bind(...fetchTypes)
