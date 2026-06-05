@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import type {
   GeoJSONSource,
@@ -20,6 +20,7 @@ interface Props {
   severityMin: number;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  newIds: Set<string>;
 }
 
 const ANCHOR = new Set(["PORT", "CHOKEPOINT", "AIRPORT"]);
@@ -340,6 +341,22 @@ export function MapView(props: Props) {
         },
       });
 
+      // Arrival pulses: an expanding, fading ring on each newly-arrived event,
+      // driven by a per-feature progress value t (0..1) updated every frame.
+      map.addSource("pulses", { type: "geojson", data: emptyFc() });
+      map.addLayer({
+        id: "pulses",
+        type: "circle",
+        source: "pulses",
+        paint: {
+          "circle-color": "rgba(0,0,0,0)",
+          "circle-stroke-color": "#36d6e7",
+          "circle-stroke-width": 2,
+          "circle-radius": ["interpolate", ["linear"], ["get", "t"], 0, 4, 1, 30] as ExpressionSpecification,
+          "circle-stroke-opacity": ["interpolate", ["linear"], ["get", "t"], 0, 0.9, 1, 0] as ExpressionSpecification,
+        },
+      });
+
       map.on("click", "objects", (e) => {
         const f = e.features?.[0] as MapGeoJSONFeature | undefined;
         const id = f?.properties?.["id"];
@@ -436,6 +453,53 @@ export function MapView(props: Props) {
     };
     const id = window.setInterval(update, 60_000);
     return () => window.clearInterval(id);
+  }, []);
+
+  // Arrival-pulse animation. Each active pulse carries an appearance time; every
+  // frame we recompute its progress t and let the layer expand+fade the ring.
+  const pulses = useRef<{ lon: number; lat: number; appeared: number }[]>([]);
+  const rafRef = useRef<number | null>(null);
+  const PULSE_MS = 1600;
+  const animatePulses = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) {
+      rafRef.current = null;
+      return;
+    }
+    const now = Date.now();
+    const active = pulses.current.filter((p) => now - p.appeared < PULSE_MS);
+    pulses.current = active;
+    (map.getSource("pulses") as GeoJSONSource | undefined)?.setData({
+      type: "FeatureCollection",
+      features: active.map((p) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+        properties: { t: (now - p.appeared) / PULSE_MS },
+      })),
+    });
+    rafRef.current = active.length > 0 ? requestAnimationFrame(animatePulses) : null;
+  }, []);
+
+  // Queue pulses for newly-arrived events and kick the loop if idle.
+  const newIds = props.newIds;
+  useEffect(() => {
+    if (newIds.size === 0 || !readyRef.current) return;
+    const byId = new Map(props.objects.map((o) => [o.id, o]));
+    const now = Date.now();
+    let added = 0;
+    for (const id of newIds) {
+      const o = byId.get(id);
+      if (o && isValidCoord(o.lat, o.lon)) {
+        pulses.current.push({ lon: o.lon, lat: o.lat, appeared: now });
+        if (++added >= 80) break; // cap a burst so a big cron cycle does not flood
+      }
+    }
+    if (pulses.current.length > 0 && rafRef.current == null) animatePulses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newIds]);
+
+  useEffect(() => () => {
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
   }, []);
 
   // Toggle projection after init. Either way the camera returns upright
