@@ -11,7 +11,8 @@ export type ObjectTypeId =
   | "FLOOD"
   | "NEWS_EVENT"
   | "PORT"
-  | "CHOKEPOINT";
+  | "CHOKEPOINT"
+  | "AIRPORT";
 
 export interface ObjectType {
   id: ObjectTypeId;

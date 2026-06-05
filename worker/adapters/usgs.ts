@@ -4,8 +4,9 @@
 import type { IngestObject } from "./types";
 import { cachedFetchJson } from "../cache";
 
+// All earthquakes in the last day (every magnitude), for a dense seismic layer.
 const URL =
-  "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson";
+  "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson";
 
 interface UsgsFeature {
   id: string;

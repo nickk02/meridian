@@ -122,7 +122,9 @@ app.post("/api/ingest/run", async (c) => {
   }
   const d = db(c);
   if (!d) return c.json(NO_DB, 503);
-  const result = await runIngest(d, c.env.CACHE);
+  // Defaults to forcing a link rebuild; pass ?force=0 to exercise the cron gate.
+  const forceLinks = c.req.query("force") !== "0";
+  const result = await runIngest(d, c.env.CACHE, { forceLinks });
   return c.json(result);
 });
 

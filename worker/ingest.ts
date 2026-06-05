@@ -13,8 +13,16 @@ export interface IngestResult {
   sources: { source: string; count: number }[];
   errors: { source: string; error: string }[];
   upserted: number;
-  links: number;
+  pruned: number;
+  links: number; // -1 when the link rebuild was skipped this cycle
 }
+
+// Object ingest runs every cron (15 min) for fresh dots, but link rebuild is
+// expensive (full delete + reinsert), so it is gated to roughly hourly. Stale
+// dynamic objects are pruned so the working set, and the rebuild cost, stay
+// bounded inside D1's free tier.
+const LINK_REBUILD_MS = 55 * 60 * 1000;
+const PRUNE_AGE_MS = 12 * 60 * 60 * 1000;
 
 const UPSERT = `INSERT INTO objects
   (id, type, name, lat, lon, severity, ts, source, props, first_seen, last_seen)
@@ -55,6 +63,7 @@ async function upsertObjects(
 export async function runIngest(
   db: D1Database,
   cache: KVNamespace | undefined,
+  opts: { forceLinks?: boolean } = {},
 ): Promise<IngestResult> {
   const ran = Date.now();
   const collected: IngestObject[] = [];
@@ -72,6 +81,26 @@ export async function runIngest(
   }
 
   await upsertObjects(db, collected, ran);
-  const links = await deriveLinks(db);
-  return { ran, sources, errors, upserted: collected.length, links };
+
+  // Drop dynamic objects not refreshed recently; anchors are permanent.
+  const prune = await db
+    .prepare(
+      `DELETE FROM objects
+        WHERE type NOT IN ('PORT','CHOKEPOINT','AIRPORT')
+          AND last_seen < ?1`,
+    )
+    .bind(ran - PRUNE_AGE_MS)
+    .run();
+  const pruned = prune.meta.changes ?? 0;
+
+  // Rebuild links only when due (or forced by a manual run).
+  let links = -1;
+  const last = await db
+    .prepare("SELECT MAX(created_ts) AS m FROM links")
+    .first<{ m: number | null }>();
+  if (opts.forceLinks || !last?.m || ran - last.m >= LINK_REBUILD_MS) {
+    links = await deriveLinks(db);
+  }
+
+  return { ran, sources, errors, upserted: collected.length, pruned, links };
 }

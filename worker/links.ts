@@ -3,9 +3,12 @@
 
 import type { OntologyObject } from "../shared/types";
 
-const ANCHOR_TYPES = new Set(["PORT", "CHOKEPOINT"]);
+const ANCHOR_TYPES = new Set(["PORT", "CHOKEPOINT", "AIRPORT"]);
 const PROXIMATE_MAX_KM = 1500;
 const COLOCATED_MAX_KM = 400;
+// Cap CO_LOCATED edges per object so dense clusters do not explode the link
+// count (and the per-ingest write volume) past D1's free tier.
+const COLOCATED_MAX_PER = 4;
 const EARTH_RADIUS_KM = 6371;
 
 export function haversineKm(
@@ -64,14 +67,20 @@ export function computeLinks(objects: GeoObject[]): DerivedLink[] {
     }
   }
 
-  for (let i = 0; i < dynamics.length; i++) {
-    for (let j = i + 1; j < dynamics.length; j++) {
-      const a = dynamics[i];
-      const b = dynamics[j];
-      if (a.type !== b.type) continue;
+  const seen = new Set<string>();
+  for (const a of dynamics) {
+    const near: { b: GeoObject; km: number }[] = [];
+    for (const b of dynamics) {
+      if (a.id === b.id || a.type !== b.type) continue;
       const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
-      if (km > COLOCATED_MAX_KM) continue;
+      if (km <= COLOCATED_MAX_KM) near.push({ b, km });
+    }
+    near.sort((x, y) => x.km - y.km);
+    for (const { b, km } of near.slice(0, COLOCATED_MAX_PER)) {
       const [s, t] = a.id < b.id ? [a.id, b.id] : [b.id, a.id];
+      const key = `${s}|${t}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       links.push({
         id: `CO_LOCATED|${s}|${t}`,
         source_id: s,

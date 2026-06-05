@@ -18,7 +18,7 @@ interface Props {
   onSelect: (id: string | null) => void;
 }
 
-const ANCHOR = new Set(["PORT", "CHOKEPOINT"]);
+const ANCHOR = new Set(["PORT", "CHOKEPOINT", "AIRPORT"]);
 
 // Severity ramp for dynamic events; anchors keep their infrastructure colors.
 const COLOR: ExpressionSpecification = [
@@ -28,6 +28,8 @@ const COLOR: ExpressionSpecification = [
   "#5bd6a0",
   "CHOKEPOINT",
   "#e8d44d",
+  "AIRPORT",
+  "#8fb6ff",
   [
     "match",
     ["get", "severity"],
