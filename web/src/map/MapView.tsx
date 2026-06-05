@@ -308,7 +308,6 @@ export function MapView(props: Props) {
             sizeMinPixels: 14,
             billboard: true,
             pickable: false,
-            parameters: { depthCompare: "less-equal" },
           }),
         );
       } else {
