@@ -38,10 +38,14 @@ export class AisCollector extends DurableObject<Env> {
   // Snapshot read. Also kickstarts the collection alarm on first contact.
   // ?debug returns the last collection diagnostics instead of vessels.
   async fetch(req: Request): Promise<Response> {
-    if ((await this.ctx.storage.getAlarm()) == null) {
+    const params = new URL(req.url).searchParams;
+    if (params.has("run")) {
+      // Force a collection window now (testing / manual refresh).
+      await this.ctx.storage.setAlarm(Date.now() + 200);
+    } else if ((await this.ctx.storage.getAlarm()) == null) {
       await this.ctx.storage.setAlarm(Date.now() + 500);
     }
-    if (new URL(req.url).searchParams.has("debug")) {
+    if (params.has("debug")) {
       const m = this.ctx.storage.sql.exec("SELECT v FROM meta WHERE k = 'diag'").toArray();
       const count = this.ctx.storage.sql.exec("SELECT COUNT(*) AS n FROM vessels").one().n;
       return Response.json({ stored: count, diag: m[0]?.v ? JSON.parse(m[0].v as string) : null });
