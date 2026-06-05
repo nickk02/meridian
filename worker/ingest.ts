@@ -16,6 +16,7 @@ import { launchAdapter } from "./adapters/launch";
 import { deriveLinks } from "./links";
 import { resolveEntities } from "./entities";
 import { countryAt } from "./geo/reverse";
+import { correlate } from "./correlate";
 
 const ADAPTERS = [
   usgsAdapter,
@@ -115,6 +116,8 @@ export interface IngestResult {
   links: number; // -1 when the link rebuild was skipped this cycle
   entities: number;
   entityLinks: number;
+  incidents: number;
+  correlatedLinks: number;
 }
 
 // Object ingest runs every cron (15 min) for fresh dots, but link rebuild is
@@ -256,13 +259,18 @@ export async function runIngest(
     .run();
   const pruned = (prune.meta.changes ?? 0) + (fastPrune.meta.changes ?? 0);
 
-  // Rebuild links only when due (or forced by a manual run).
+  // Rebuild links + incidents only when due (or forced by a manual run).
   let links = -1;
+  let incidents = 0;
+  let correlatedLinks = 0;
   const last = await db
-    .prepare("SELECT MAX(created_ts) AS m FROM links")
+    .prepare("SELECT MAX(created_ts) AS m FROM links WHERE kind != 'CORRELATED_WITH'")
     .first<{ m: number | null }>();
   if (opts.forceLinks || !last?.m || ran - last.m >= LINK_REBUILD_MS) {
     links = await deriveLinks(db);
+    const corr = await correlate(db, ran);
+    incidents = corr.incidents;
+    correlatedLinks = corr.correlatedLinks;
   }
 
   return {
@@ -274,5 +282,7 @@ export async function runIngest(
     links,
     entities: ents.entities,
     entityLinks: ents.links,
+    incidents,
+    correlatedLinks,
   };
 }

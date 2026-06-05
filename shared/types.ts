@@ -121,6 +121,19 @@ export interface EntityRef {
   confidence: number;
 }
 
+export interface Incident {
+  id: string;
+  label: string;
+  domain: Domain;
+  centroid_lat: number;
+  centroid_lon: number;
+  t_start: number;
+  t_end: number;
+  member_count: number;
+  severity_max: number;
+  created_ts: number;
+}
+
 export interface HealthResponse {
   ok: boolean;
 }

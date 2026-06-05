@@ -9,6 +9,7 @@ import type {
   Annotation,
   Entity,
   EntityRef,
+  Incident,
 } from "../shared/types";
 
 function parseJson(value: unknown): Record<string, unknown> | null {
@@ -222,6 +223,39 @@ export async function getEntityEvents(
         WHERE el.entity_id = ? ORDER BY o.ts DESC LIMIT ?`,
     )
     .bind(id, limit)
+    .all<ObjectRow>();
+  return results.map(mapObject);
+}
+
+export async function listIncidents(
+  db: D1Database,
+  limit: number,
+): Promise<Incident[]> {
+  const { results } = await db
+    .prepare(
+      "SELECT * FROM incidents ORDER BY member_count DESC, t_end DESC LIMIT ?",
+    )
+    .bind(limit)
+    .all<Incident>();
+  return results;
+}
+
+export async function getIncident(
+  db: D1Database,
+  id: string,
+): Promise<Incident | null> {
+  return db.prepare("SELECT * FROM incidents WHERE id = ?").bind(id).first<Incident>();
+}
+
+export async function getIncidentMembers(
+  db: D1Database,
+  id: string,
+): Promise<OntologyObject[]> {
+  const { results } = await db
+    .prepare(
+      "SELECT * FROM objects WHERE incident_id = ? ORDER BY severity DESC, ts ASC",
+    )
+    .bind(id)
     .all<ObjectRow>();
   return results.map(mapObject);
 }

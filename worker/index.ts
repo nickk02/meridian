@@ -12,6 +12,9 @@ import {
   getObjectEntities,
   getEntity,
   getEntityEvents,
+  listIncidents,
+  getIncident,
+  getIncidentMembers,
 } from "./repo";
 import { runIngest } from "./ingest";
 import { ActionBody, applyAction } from "./actions";
@@ -83,6 +86,22 @@ app.get("/api/object/:id", async (c) => {
     getObjectEntities(d, id),
   ]);
   return c.json({ object, neighbors, state, annotations, entities });
+});
+
+app.get("/api/incidents", async (c) => {
+  const d = db(c);
+  if (!d) return c.json(NO_DB, 503);
+  const limit = clampLimit(c.req.query("limit"), 100, 500);
+  return c.json(await listIncidents(d, limit));
+});
+
+app.get("/api/incident/:id", async (c) => {
+  const d = db(c);
+  if (!d) return c.json(NO_DB, 503);
+  const incident = await getIncident(d, c.req.param("id"));
+  if (!incident) return c.json({ error: "not found" }, 404);
+  const members = await getIncidentMembers(d, c.req.param("id"));
+  return c.json({ incident, members });
 });
 
 app.get("/api/entity/:id", async (c) => {

@@ -27,7 +27,8 @@
   "kv_namespaces": [
     { "binding": "CACHE", "id": "local-placeholder" }
   ],
-  "r2_buckets": [{ "binding": "RAW", "bucket_name": "meridian-raw" }],
-  "vectorize": [{ "binding": "VEC", "index_name": "meridian-events" }],
-  "ai": { "binding": "AI" }
+  "r2_buckets": [{ "binding": "RAW", "bucket_name": "meridian-raw" }]
+  // VEC and AI are deploy-only: Vectorize/Workers AI have no local emulation, so
+  // including them forces wrangler dev into remote-proxy mode. The semantic step
+  // is tested against the deployed Worker.
 }
