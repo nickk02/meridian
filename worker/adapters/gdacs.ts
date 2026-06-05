@@ -59,13 +59,15 @@ export function normalizeGdacs(feed: GdacsFeed): IngestObject[] {
     if (!type || !f.geometry || f.geometry.type !== "Point") continue;
     const [lon, lat] = f.geometry.coordinates;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-    // Timestamp for correlation: a drought is an ongoing condition (use when it
-    // was last updated), every other type is a point event (use when it struck),
-    // so its time aligns with the same event in the detail feeds.
+    // Timestamp for correlation. Only an earthquake is a point event (use when
+    // it struck, to align with the USGS quake time). Storms, floods, volcanoes,
+    // wildfires, and droughts are ONGOING conditions, so use when GDACS last
+    // updated them: an active hazard stays "now" and aligns with the fresh
+    // detail feeds, while a closed one ages out via the bound below.
     const ts =
-      type === "DROUGHT"
-        ? parseUtc(p.datemodified) || parseUtc(p.fromdate)
-        : parseUtc(p.fromdate) || parseUtc(p.datemodified);
+      type === "SEISMIC"
+        ? parseUtc(p.fromdate) || parseUtc(p.datemodified)
+        : parseUtc(p.datemodified) || parseUtc(p.fromdate);
     if (ts > 0 && now - ts > MAX_AGE_MS) continue; // drop stale disasters
     out.push({
       id: `GDACS-${p.eventtype}-${p.eventid}`,
