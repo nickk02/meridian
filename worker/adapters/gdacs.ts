@@ -1,0 +1,81 @@
+// GDACS (UN/EC Global Disaster Alert and Coordination System), keyless GeoJSON.
+// Alert-graded multi-hazard events with native coordinates. Normalization is a
+// pure function so it can be tested without a network.
+
+import type { IngestObject } from "./types";
+import type { ObjectTypeId } from "../../shared/types";
+import { cachedFetchJson } from "../cache";
+
+const URL = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH";
+
+const TYPE: Record<string, ObjectTypeId> = {
+  EQ: "SEISMIC",
+  TC: "STORM",
+  FL: "FLOOD",
+  VO: "VOLCANO",
+  WF: "WILDFIRE",
+  DR: "DROUGHT",
+};
+const SEVERITY: Record<string, number> = { Red: 4, Orange: 3, Green: 2 };
+
+interface GdacsFeature {
+  geometry: { type: string; coordinates: [number, number] } | null;
+  properties: {
+    eventtype: string;
+    eventid: number;
+    name: string;
+    alertlevel: string;
+    fromdate: string;
+    datemodified: string;
+    country?: string;
+    iso3?: string;
+    severitydata?: { severitytext?: string };
+    url?: { report?: string };
+  };
+}
+interface GdacsFeed {
+  features: GdacsFeature[];
+}
+
+// GDACS timestamps are UTC without a zone suffix; append Z so Date.parse is UTC.
+function parseUtc(s: string | undefined): number {
+  if (!s) return 0;
+  const t = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : s + "Z");
+  return Number.isFinite(t) ? t : 0;
+}
+
+export function normalizeGdacs(feed: GdacsFeed): IngestObject[] {
+  const out: IngestObject[] = [];
+  for (const f of feed.features ?? []) {
+    const p = f.properties;
+    const type = TYPE[p.eventtype];
+    if (!type || !f.geometry || f.geometry.type !== "Point") continue;
+    const [lon, lat] = f.geometry.coordinates;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    out.push({
+      id: `GDACS-${p.eventtype}-${p.eventid}`,
+      type,
+      name: p.name,
+      lat,
+      lon,
+      severity: SEVERITY[p.alertlevel] ?? 2,
+      ts: parseUtc(p.datemodified) || parseUtc(p.fromdate),
+      source: "gdacs",
+      props: {
+        alertlevel: p.alertlevel,
+        country: p.country ?? p.iso3 ?? null,
+        impact: p.severitydata?.severitytext ?? null,
+        report: p.url?.report ?? null,
+      },
+    });
+  }
+  return out;
+}
+
+export const gdacsAdapter = {
+  source: "gdacs",
+  async fetch(cache: KVNamespace | undefined): Promise<IngestObject[]> {
+    const feed = await cachedFetchJson<GdacsFeed>(cache, "feed:gdacs", URL, 900);
+    return normalizeGdacs(feed);
+  },
+};

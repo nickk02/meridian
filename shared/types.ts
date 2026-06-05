@@ -12,7 +12,8 @@ export type ObjectTypeId =
   | "NEWS_EVENT"
   | "PORT"
   | "CHOKEPOINT"
-  | "AIRPORT";
+  | "AIRPORT"
+  | "DROUGHT";
 
 export interface ObjectType {
   id: ObjectTypeId;

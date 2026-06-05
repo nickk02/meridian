@@ -4,9 +4,10 @@
 import type { IngestObject } from "./adapters/types";
 import { usgsAdapter } from "./adapters/usgs";
 import { eonetAdapter } from "./adapters/eonet";
+import { gdacsAdapter } from "./adapters/gdacs";
 import { deriveLinks } from "./links";
 
-const ADAPTERS = [usgsAdapter, eonetAdapter];
+const ADAPTERS = [usgsAdapter, eonetAdapter, gdacsAdapter];
 
 export interface IngestResult {
   ran: number;
