@@ -3,8 +3,6 @@ import {
   Navbar,
   NavbarGroup,
   Alignment,
-  Tabs,
-  Tab,
   Tag,
   Icon,
   Button,
@@ -15,10 +13,10 @@ import type { ObjectType } from "../../shared/types";
 import { useOntology, useUtcClock, useIsMobile, useIncidents, useCrossIncidents } from "./hooks";
 import { MapView } from "./map/MapView";
 import { LayerControl } from "./components/LayerControl";
+import { OverlayChips } from "./components/OverlayChips";
 import { Inspector } from "./components/Inspector";
 import { GraphView } from "./components/GraphView";
-import { FeedView } from "./components/FeedView";
-import { ActivityLog } from "./components/ActivityLog";
+import { FeedSheet } from "./components/FeedSheet";
 import { BootOverlay } from "./components/BootOverlay";
 
 export function App() {
@@ -30,11 +28,9 @@ export function App() {
   const [visible, setVisible] = useState<Set<string>>(new Set());
   const [severityMin, setSeverityMin] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<string>("map");
+  const [tab, setTab] = useState<"map" | "graph">("map");
   const [activityVersion, setActivityVersion] = useState(0);
   const [layersOpen, setLayersOpen] = useState(false);
-  const [logOpen, setLogOpen] = useState(false);
-  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [booting, setBooting] = useState(true);
   // Live-overlay visibility, owned here so the Layers control and the map share it.
   const [satsOn, setSatsOn] = useState(true);
@@ -51,11 +47,6 @@ export function App() {
       setVisible(new Set(onto.types.map((t) => t.id)));
     }
   }, [onto.types, visible.size]);
-
-  // On mobile, selecting an object slides the inspector up.
-  useEffect(() => {
-    if (isMobile && selectedId) setInspectorOpen(true);
-  }, [isMobile, selectedId]);
 
   const typeMap = useMemo(
     () => new Map<string, ObjectType>(onto.types.map((t) => [t.id, t])),
@@ -90,12 +81,6 @@ export function App() {
         onSeverityMin={setSeverityMin}
         shown={shownCount}
         total={onto.objects.length}
-        satsOn={satsOn}
-        shipsOn={shipsOn}
-        planesOn={planesOn}
-        onToggleSats={() => setSatsOn((v) => !v)}
-        onToggleShips={() => setShipsOn((v) => !v)}
-        onTogglePlanes={() => setPlanesOn((v) => !v)}
         collapsible={collapsible}
       />
     ) : (
@@ -112,117 +97,160 @@ export function App() {
       </div>
     );
 
-  const inspector = (
-    <Inspector selectedId={selectedId} typeMap={typeMap} onSelect={setSelectedId} onActed={onActed} />
+  const overlayChips = (
+    <OverlayChips
+      satsOn={satsOn}
+      shipsOn={shipsOn}
+      planesOn={planesOn}
+      onToggleSats={() => setSatsOn((v) => !v)}
+      onToggleShips={() => setShipsOn((v) => !v)}
+      onTogglePlanes={() => setPlanesOn((v) => !v)}
+    />
   );
 
-  const center = (
-    <main className="mer-center">
-      <Tabs id="mer-view" className="mer-tabs" selectedTabId={tab} onChange={(t) => setTab(String(t))}>
-        <Tab id="feed" title="FEED" />
-        <Tab id="map" title="MAP" />
-        <Tab id="graph" title="GRAPH" />
-      </Tabs>
-      <div className="mer-center-body">
-        {tab === "map" ? (
-          <>
-            <MapView
-              objects={onto.objects}
-              links={onto.links}
-              visibleTypes={visible}
-              severityMin={severityMin}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              newIds={onto.newIds}
-              satsOn={satsOn}
-              shipsOn={shipsOn}
-              planesOn={planesOn}
-            />
-            {!isMobile && <div className="mer-layerctrl-overlay">{layerControl(true)}</div>}
-          </>
-        ) : tab === "feed" ? (
-          <FeedView
-            objects={onto.objects}
-            incidents={incidents}
-            crossIncidents={crossIncidents}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-          />
+  const viewToggle = (
+    <div className="mer-view-toggle">
+      <button className={`mer-view-btn ${tab === "map" ? "on" : ""}`} onClick={() => setTab("map")}>
+        MAP
+      </button>
+      <button className={`mer-view-btn ${tab === "graph" ? "on" : ""}`} onClick={() => setTab("graph")}>
+        GRAPH
+      </button>
+    </div>
+  );
+
+  // The fullscreen base: map or graph fills the whole stage, panels float over it.
+  const stage = (
+    <div className="mer-stage">
+      {tab === "map" ? (
+        <MapView
+          objects={onto.objects}
+          links={onto.links}
+          visibleTypes={visible}
+          severityMin={severityMin}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          newIds={onto.newIds}
+          satsOn={satsOn}
+          shipsOn={shipsOn}
+          planesOn={planesOn}
+        />
+      ) : (
+        <GraphView selectedId={selectedId} typeMap={typeMap} onSelect={setSelectedId} />
+      )}
+
+      {/* On-map floating controls (map view only). */}
+      {tab === "map" && !isMobile && (
+        <>
+          {overlayChips}
+          <div className="mer-layerctrl-overlay">{layerControl(true)}</div>
+        </>
+      )}
+      {tab === "map" && isMobile && overlayChips}
+
+      {/* Inspector mounts only when something is selected, slides in from the right. */}
+      {selectedId &&
+        (isMobile ? (
+          <Drawer
+            isOpen={!!selectedId}
+            onClose={() => setSelectedId(null)}
+            position="bottom"
+            size="70%"
+            className="bp5-dark mer-drawer"
+            title="Inspector"
+          >
+            <div className="mer-drawer-body">
+              <Inspector selectedId={selectedId} typeMap={typeMap} onSelect={setSelectedId} onActed={onActed} />
+            </div>
+          </Drawer>
         ) : (
-          <GraphView selectedId={selectedId} typeMap={typeMap} onSelect={setSelectedId} />
-        )}
-      </div>
-    </main>
+          <aside className="mer-inspector-float">
+            <button
+              className="mer-inspector-close"
+              onClick={() => setSelectedId(null)}
+              aria-label="Close inspector"
+            >
+              <Icon icon="cross" size={14} />
+            </button>
+            <Inspector selectedId={selectedId} typeMap={typeMap} onSelect={setSelectedId} onActed={onActed} />
+          </aside>
+        ))}
+
+      {/* The live event feed rides over the map as a draggable bottom sheet. */}
+      <FeedSheet
+        objects={onto.objects}
+        incidents={incidents}
+        crossIncidents={crossIncidents}
+        newIds={onto.newIds}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        activityVersion={activityVersion}
+      />
+    </div>
   );
 
   return (
     <>
       {booting && <BootOverlay />}
       <div className="mer-shell mer-revealing">
-      <Navbar className="mer-navbar">
-        <NavbarGroup align={Alignment.LEFT}>
-          {isMobile && (
-            <Button
+        <Navbar className="mer-navbar">
+          <NavbarGroup align={Alignment.LEFT}>
+            {isMobile && (
+              <Button
+                minimal
+                icon="layers"
+                aria-label="Layers"
+                className="mer-nav-btn"
+                onClick={() => setLayersOpen(true)}
+              />
+            )}
+            <div>
+              <div className="mer-brand">MERIDIAN</div>
+              <div className="mer-brand-sub">Connecting the world's events in real time.</div>
+            </div>
+            {!isMobile && <span style={{ width: 24 }} />}
+            {!isMobile && viewToggle}
+          </NavbarGroup>
+          <NavbarGroup align={Alignment.RIGHT}>
+            {!isMobile && (
+              <>
+                <Tag minimal className="mer-mono" style={{ marginRight: 10 }}>
+                  {onto.objects.length} OBJECTS
+                </Tag>
+                <Tag minimal className="mer-mono" style={{ marginRight: 10 }}>
+                  {onto.links.length} LINKS
+                </Tag>
+              </>
+            )}
+            <Tag
               minimal
-              icon="layers"
-              aria-label="Layers"
-              className="mer-nav-btn"
-              onClick={() => setLayersOpen(true)}
-            />
-          )}
-          <div>
-            <div className="mer-brand">MERIDIAN</div>
-            <div className="mer-brand-sub">Connecting the world's events in real time.</div>
-          </div>
-        </NavbarGroup>
-        <NavbarGroup align={Alignment.RIGHT}>
-          {!isMobile && (
-            <>
-              <Tag minimal className="mer-mono" style={{ marginRight: 10 }}>
-                {onto.objects.length} OBJECTS
-              </Tag>
-              <Tag minimal className="mer-mono" style={{ marginRight: 10 }}>
-                {onto.links.length} LINKS
-              </Tag>
-            </>
-          )}
-          <Tag
-            minimal
-            intent={onto.status === "ok" ? "success" : onto.status === "down" ? "danger" : "none"}
-            className="mer-mono"
-          >
-            <span
-              className={`mer-status-dot ${
-                onto.status === "ok" ? "ok" : onto.status === "down" ? "down" : "idle"
-              }`}
-            />
-            {!isMobile && `FEED ${onto.status.toUpperCase()}`}
-          </Tag>
-          {!isMobile && (
-            <>
-              <span style={{ width: 16 }} />
-              <span className="mer-clock">
-                {clock}
-                <span className="mer-clock-z">UTC</span>
-              </span>
-            </>
-          )}
-          {isMobile && (
-            <Button
-              minimal
-              icon="history"
-              aria-label="Activity log"
-              className="mer-nav-btn"
-              onClick={() => setLogOpen(true)}
-            />
-          )}
-        </NavbarGroup>
-      </Navbar>
+              intent={onto.status === "ok" ? "success" : onto.status === "down" ? "danger" : "none"}
+              className="mer-mono"
+            >
+              <span
+                className={`mer-status-dot ${
+                  onto.status === "ok" ? "ok" : onto.status === "down" ? "down" : "idle"
+                }`}
+              />
+              {!isMobile && `FEED ${onto.status.toUpperCase()}`}
+            </Tag>
+            {!isMobile && (
+              <>
+                <span style={{ width: 16 }} />
+                <span className="mer-clock">
+                  {clock}
+                  <span className="mer-clock-z">UTC</span>
+                </span>
+              </>
+            )}
+            {isMobile && <span style={{ width: 8 }} />}
+            {isMobile && viewToggle}
+          </NavbarGroup>
+        </Navbar>
 
-      {isMobile ? (
-        <>
-          <div className="mer-body-mobile">{center}</div>
+        {stage}
 
+        {isMobile && (
           <Drawer
             isOpen={layersOpen}
             onClose={() => setLayersOpen(false)}
@@ -233,42 +261,7 @@ export function App() {
           >
             <div className="mer-drawer-body">{layerControl(false)}</div>
           </Drawer>
-
-          <Drawer
-            isOpen={inspectorOpen}
-            onClose={() => setInspectorOpen(false)}
-            position="bottom"
-            size="70%"
-            className="bp5-dark mer-drawer"
-            title="Inspector"
-          >
-            <div className="mer-drawer-body">{inspector}</div>
-          </Drawer>
-
-          <Drawer
-            isOpen={logOpen}
-            onClose={() => setLogOpen(false)}
-            position="bottom"
-            size={DrawerSize.SMALL}
-            className="bp5-dark mer-drawer"
-            title="Activity"
-          >
-            <div className="mer-drawer-body">
-              <ActivityLog version={activityVersion} onSelect={(id) => setSelectedId(id)} />
-            </div>
-          </Drawer>
-        </>
-      ) : (
-        <>
-          <div className="mer-body">
-            {center}
-            <aside className="mer-inspector">{inspector}</aside>
-          </div>
-          <footer className="mer-bottom">
-            <ActivityLog version={activityVersion} onSelect={setSelectedId} />
-          </footer>
-        </>
-      )}
+        )}
       </div>
     </>
   );

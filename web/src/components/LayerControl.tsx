@@ -12,14 +12,8 @@ interface Props {
   onSeverityMin: (n: number) => void;
   shown: number;
   total: number;
-  // Live overlays (not ontology objects): aircraft, ships, satellites.
-  satsOn: boolean;
-  shipsOn: boolean;
-  planesOn: boolean;
-  onToggleSats: () => void;
-  onToggleShips: () => void;
-  onTogglePlanes: () => void;
-  // When true (the on-map overlay) the panel can collapse to just its header.
+  // When true (the on-map overlay) the panel can collapse to just its header,
+  // and starts collapsed.
   collapsible?: boolean;
 }
 
@@ -38,20 +32,11 @@ function categoryOf(id: string): string {
   return CATEGORIES.find((c) => c.types.includes(id as ObjectTypeId))?.key ?? "other";
 }
 
-function OverlayRow({ label, color, on, onClick }: { label: string; color: string; on: boolean; onClick: () => void }) {
-  return (
-    <button className="mer-overlay-row" onClick={onClick} aria-pressed={on}>
-      <Icon icon={on ? "eye-open" : "eye-off"} size={12} color={on ? "#c6d0de" : "#5a6678"} />
-      <span className="mer-swatch" style={{ background: color, opacity: on ? 1 : 0.35 }} />
-      <span style={{ opacity: on ? 1 : 0.5 }}>{label}</span>
-    </button>
-  );
-}
-
 export function LayerControl(props: Props) {
   const { types, counts, visible, onToggle } = props;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [open, setOpen] = useState(true);
+  // Floating on-map panel starts closed (just the corner button).
+  const [open, setOpen] = useState(!props.collapsible);
 
   const present = types.filter((t) => (counts.get(t.id) ?? 0) > 0);
   const byCategory = new Map<string, ObjectType[]>();
@@ -135,11 +120,6 @@ export function LayerControl(props: Props) {
               { label: "Crit", value: "4" },
             ]}
           />
-
-          <div className="mer-cat-label" style={{ margin: "12px 0 4px" }}>LIVE OVERLAYS</div>
-          <OverlayRow label="Aircraft" color="#8fb6ff" on={props.planesOn} onClick={props.onTogglePlanes} />
-          <OverlayRow label="Ships" color="#4ade80" on={props.shipsOn} onClick={props.onToggleShips} />
-          <OverlayRow label="Satellites" color="#eaf6ff" on={props.satsOn} onClick={props.onToggleSats} />
 
           <Tree
             contents={nodes}

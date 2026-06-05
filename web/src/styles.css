@@ -47,41 +47,29 @@ body,
 /* ----- Shell layout ------------------------------------------------------- */
 
 .mer-shell {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   height: 100dvh;
 }
 
-.mer-body {
-  display: grid;
-  grid-template-columns: 1fr 360px;
+/* Fullscreen base: the map or graph fills the whole stage edge to edge, and
+   every panel floats over it as an on-demand overlay. */
+.mer-stage {
+  position: relative;
+  flex: 1;
   min-height: 0;
-  gap: 1px;
-  background: var(--mer-border);
 }
 
-.mer-center,
-.mer-inspector {
-  background: var(--mer-panel);
-  min-height: 0;
-  overflow: auto;
-}
-
-.mer-center {
-  display: flex;
-  flex-direction: column;
-}
-
-/* On-map Layers control: a collapsible panel floating over the map (top-left),
-   replacing the old fixed left rail. */
+/* On-map Layers control: a collapsed corner button that opens a translucent
+   floating panel over the map (top-left). Sits below the overlay chip row. */
 .mer-layerctrl-overlay {
   position: absolute;
-  top: 10px;
+  top: 50px;
   left: 10px;
   z-index: 6;
   width: 248px;
-  max-height: calc(100% - 90px);
+  max-height: calc(100% - 130px);
   display: flex;
   flex-direction: column;
 }
@@ -132,11 +120,107 @@ body,
   background: rgba(255, 255, 255, 0.03);
 }
 
-.mer-bottom {
-  height: 168px;
-  background: var(--mer-panel);
-  border-top: 1px solid var(--mer-border);
+/* ----- View toggle (MAP / GRAPH) in the header ---------------------------- */
+
+.mer-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--mer-border);
+  background: rgba(8, 11, 18, 0.6);
+}
+.mer-view-btn {
+  font-family: var(--mer-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--mer-text-dim);
+  background: transparent;
+  border: none;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.mer-view-btn + .mer-view-btn {
+  border-left: 1px solid var(--mer-border);
+}
+.mer-view-btn:hover {
+  color: var(--mer-text);
+}
+.mer-view-btn.on {
+  color: var(--mer-bg);
+  background: var(--mer-cyan);
+}
+
+/* ----- On-map live-overlay chips ------------------------------------------ */
+
+.mer-overlay-chips {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 6;
+  display: flex;
+  gap: 6px;
+}
+.mer-overlay-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mer-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--mer-text-dim);
+  background: rgba(8, 11, 18, 0.9);
+  border: 1px solid var(--mer-border);
+  backdrop-filter: blur(6px);
+  padding: 5px 9px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.mer-overlay-chip:hover {
+  color: var(--mer-text);
+}
+.mer-overlay-chip.on {
+  color: var(--mer-text);
+  border-color: var(--mer-cyan-dim);
+}
+.mer-overlay-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* ----- Floating inspector (slides in from the right on select) ------------ */
+
+.mer-inspector-float {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 360px;
+  max-width: 86vw;
+  z-index: 9;
+  background: rgba(10, 13, 21, 0.94);
+  border-left: 1px solid var(--mer-border);
+  backdrop-filter: blur(8px);
   overflow: auto;
+  box-shadow: -16px 0 40px rgba(0, 0, 0, 0.5);
+  animation: mer-slide-in 0.22s ease;
+}
+@keyframes mer-slide-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.mer-inspector-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  background: transparent;
+  border: none;
+  color: var(--mer-text-dim);
+  cursor: pointer;
+  padding: 4px;
+}
+.mer-inspector-close:hover {
+  color: var(--mer-cyan);
 }
 
 /* ----- Navbar ------------------------------------------------------------- */
@@ -834,9 +918,7 @@ body,
 }
 
 .mer-shell.mer-revealing > .mer-navbar { animation: mer-reveal 0.55s ease 2.5s backwards; }
-.mer-shell.mer-revealing > .mer-body,
-.mer-shell.mer-revealing > .mer-body-mobile { animation: mer-reveal 0.55s ease 2.68s backwards; }
-.mer-shell.mer-revealing > .mer-bottom { animation: mer-reveal 0.55s ease 2.84s backwards; }
+.mer-shell.mer-revealing > .mer-stage { animation: mer-reveal 0.55s ease 2.68s backwards; }
 @keyframes mer-reveal {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
@@ -1039,3 +1121,166 @@ body,
 
 /* feed tab gets a gold underline accent as the primary surface */
 .mer-tabs .bp5-tab[aria-selected="true"] { color: var(--mer-cyan); }
+
+/* ----- Bottom feed sheet (draggable live event feed) ---------------------- */
+
+.mer-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  background: rgba(8, 11, 18, 0.96);
+  border-top: 1px solid var(--mer-border);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 -14px 36px rgba(0, 0, 0, 0.5);
+  min-height: 0;
+}
+/* drag grip strip across the top of the sheet */
+.mer-sheet-grip {
+  flex: 0 0 auto;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.mer-grip-bar {
+  width: 46px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--mer-border);
+}
+.mer-sheet-grip:hover .mer-grip-bar { background: var(--mer-cyan-dim); }
+
+/* collapsed: a single live ticker row */
+.mer-ticker {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 12px 4px;
+  overflow: hidden;
+  text-align: left;
+}
+.mer-ticker-label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--mer-cyan);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.mer-ticker-new {
+  color: var(--mer-bg);
+  background: var(--mer-amber);
+  border-radius: 8px;
+  padding: 0 5px;
+  font-size: 8px;
+}
+.mer-ticker-track {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 24px, #000 92%, transparent);
+}
+.mer-ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #c6d0de;
+}
+.mer-ticker-item.fresh {
+  animation: mer-ticker-pulse 2.4s ease;
+}
+@keyframes mer-ticker-pulse {
+  0% { background: rgba(54, 214, 231, 0.28); box-shadow: 0 0 0 3px rgba(54, 214, 231, 0.18); }
+  100% { background: transparent; box-shadow: none; }
+}
+.mer-ticker-time { color: var(--mer-text-dim); font-size: 10px; }
+.mer-ticker-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.mer-ticker-name {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mer-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mer-cyan);
+  box-shadow: 0 0 8px var(--mer-cyan);
+  flex-shrink: 0;
+  animation: mer-live-blink 2s ease-in-out infinite;
+}
+@keyframes mer-live-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* expanded: header + full feed */
+.mer-sheet-open {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mer-sheet-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 2px 10px 8px;
+  border-bottom: 1px solid var(--mer-border);
+}
+.mer-sheet-title {
+  font-family: var(--mer-display);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: #9aa6b8;
+}
+.mer-sheet-spacer { flex: 1; }
+.mer-sheet-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mer-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--mer-text-dim);
+  background: transparent;
+  border: 1px solid var(--mer-border);
+  padding: 4px 9px;
+  cursor: pointer;
+}
+.mer-sheet-tab:hover { color: var(--mer-text); }
+.mer-sheet-tab.on { color: var(--mer-cyan); border-color: var(--mer-cyan-dim); }
+.mer-sheet-collapse {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.mer-sheet-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.mer-sheet-history { position: absolute; inset: 0; overflow: auto; }
