@@ -7,6 +7,7 @@ import {
   getObject,
   getNeighbors,
 } from "./repo";
+import { runIngest } from "./ingest";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -14,6 +15,8 @@ export interface Env {
   // bound. Data routes return 503 until DB exists.
   DB?: D1Database;
   CACHE?: KVNamespace;
+  // Shared secret guarding manual ingestion. Unset disables the manual route.
+  INGEST_TOKEN?: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -74,6 +77,20 @@ app.get("/api/links", async (c) => {
   return c.json(await listLinks(d, { limit }));
 });
 
+// Manual ingest trigger. Guarded by a bearer token so the public deployment
+// cannot be driven by anyone. Cron runs the same job unguarded internally.
+app.post("/api/ingest/run", async (c) => {
+  const token = c.env.INGEST_TOKEN;
+  if (!token) return c.json({ error: "ingest disabled" }, 403);
+  if (c.req.header("authorization") !== `Bearer ${token}`) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  const d = db(c);
+  if (!d) return c.json(NO_DB, 503);
+  const result = await runIngest(d, c.env.CACHE);
+  return c.json(result);
+});
+
 // Unknown API routes return JSON, never the SPA shell.
 app.all("/api/*", (c) => c.json({ error: "not found" }, 404));
 
@@ -83,12 +100,13 @@ app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 export default {
   fetch: app.fetch,
 
-  // Scheduled ingestion is wired in Phase C.
+  // Cron-driven ingestion. Skips cleanly if D1 is not yet bound.
   async scheduled(
     _event: ScheduledController,
-    _env: Env,
-    _ctx: ExecutionContext,
+    env: Env,
+    ctx: ExecutionContext,
   ): Promise<void> {
-    return;
+    if (!env.DB) return;
+    ctx.waitUntil(runIngest(env.DB, env.CACHE).then(() => undefined));
   },
 };
