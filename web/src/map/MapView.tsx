@@ -44,13 +44,13 @@ const COLOR: ExpressionSpecification = [
     "match",
     ["get", "severity"],
     1,
-    "#2dd6e8",
+    "#36d6e7",
     2,
-    "#f2a93b",
+    "#ffb020",
     3,
-    "#ff6b3d",
+    "#ff7a1a",
     4,
-    "#ff4d4d",
+    "#ff2d55",
     "#8a93a3",
   ],
 ];
@@ -259,6 +259,32 @@ export function MapView(props: Props) {
           "circle-stroke-width": ["case", ["==", ["get", "anchor"], 1], 1.5, 0.4],
           "circle-stroke-color": ["case", ["==", ["get", "anchor"], 1], "#0a0e14", "#05080d"],
           "circle-stroke-opacity": 0.9,
+        },
+      });
+
+      // Labels for significant events only (sev >= 3), so the map reads as
+      // named intelligence rather than anonymous dots. Glyphs come from the
+      // vector basemap. Gated by zoom and severity to avoid clutter.
+      map.addLayer({
+        id: "objects-label",
+        type: "symbol",
+        source: "objects",
+        filter: [">=", ["get", "severity"], 3],
+        minzoom: 2.5,
+        layout: {
+          "text-field": ["get", "name"],
+          "text-font": ["Open Sans Regular"],
+          "text-size": 10,
+          "text-offset": [0, 1.1],
+          "text-anchor": "top",
+          "text-max-width": 16,
+          "text-optional": true,
+        },
+        paint: {
+          "text-color": "#d7e0ec",
+          "text-halo-color": "#05080d",
+          "text-halo-width": 1.4,
+          "text-opacity": ["interpolate", ["linear"], ["zoom"], 2.5, 0, 4, 0.9] as ExpressionSpecification,
         },
       });
 
