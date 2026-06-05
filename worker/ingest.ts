@@ -8,6 +8,7 @@ import { gdacsAdapter } from "./adapters/gdacs";
 import { nwsAdapter } from "./adapters/nws";
 import { nhcAdapter } from "./adapters/nhc";
 import { nifcAdapter } from "./adapters/nifc";
+import { cneosAdapter } from "./adapters/cneos";
 import { deriveLinks } from "./links";
 
 const ADAPTERS = [
@@ -17,6 +18,7 @@ const ADAPTERS = [
   nwsAdapter,
   nhcAdapter,
   nifcAdapter,
+  cneosAdapter,
 ];
 
 export interface IngestResult {

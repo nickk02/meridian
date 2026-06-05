@@ -14,7 +14,8 @@ export type ObjectTypeId =
   | "CHOKEPOINT"
   | "AIRPORT"
   | "DROUGHT"
-  | "ALERT";
+  | "ALERT"
+  | "FIREBALL";
 
 export interface ObjectType {
   id: ObjectTypeId;
