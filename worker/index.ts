@@ -18,6 +18,7 @@ import {
   getIncidentMembers,
 } from "./repo";
 import { runIngest } from "./ingest";
+import { correlateSemantic } from "./semantic";
 import { ActionBody, applyAction } from "./actions";
 
 export interface Env {
@@ -206,6 +207,24 @@ app.post("/api/ingest/run", async (c) => {
   const forceLinks = c.req.query("force") !== "0";
   const result = await runIngest(d, c.env.CACHE, c.env.RAW, { forceLinks, keys: adapterKeys(c.env) });
   return c.json(result);
+});
+
+// Guarded: run semantic cross-feed corroboration (Workers AI + Vectorize). Kept
+// out of the cron path so AI/Vectorize usage is bounded to explicit triggers.
+app.post("/api/correlate/semantic", async (c) => {
+  const token = c.env.INGEST_TOKEN;
+  if (!token || c.req.header("authorization") !== `Bearer ${token}`) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  const d = db(c);
+  if (!d) return c.json(NO_DB, 503);
+  if (!c.env.AI || !c.env.VEC) return c.json({ error: "AI or Vectorize not bound" }, 503);
+  try {
+    const result = await correlateSemantic(d, c.env.AI, c.env.VEC, Date.now());
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: String(e) }, 500);
+  }
 });
 
 // Guarded: confirm a source's latest raw blob exists in R2 (Stage B gate).
