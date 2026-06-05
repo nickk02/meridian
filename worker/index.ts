@@ -19,6 +19,7 @@ import {
 } from "./repo";
 import { runIngest } from "./ingest";
 import { correlateSemantic } from "./semantic";
+import { cachedFetchJson } from "./cache";
 import { ActionBody, applyAction } from "./actions";
 
 // The AIS collector Durable Object must be exported from the Worker entry.
@@ -137,6 +138,41 @@ app.get("/api/incidents", async (c) => {
   if (!d) return c.json(NO_DB, 503);
   const limit = clampLimit(c.req.query("limit"), 100, 500);
   return c.json(await listIncidents(d, limit));
+});
+
+// Live aircraft overlay: proxy airplanes.live (cached) and return a slim list.
+// Aircraft are a fast-moving live overlay, not durable ontology objects, so this
+// keeps them out of D1 (and out of the write budget).
+app.get("/api/aircraft", async (c) => {
+  try {
+    const resp = await cachedFetchJson<{
+      ac?: {
+        hex: string;
+        flight?: string;
+        r?: string;
+        t?: string;
+        desc?: string;
+        lat?: number;
+        lon?: number;
+        alt_baro?: number | string;
+        track?: number;
+      }[];
+    }>(c.env.CACHE, "feed:airplanes", "https://api.airplanes.live/v2/mil", 20);
+    const ac = (resp?.ac ?? [])
+      .filter((a) => Number.isFinite(a.lat) && Number.isFinite(a.lon))
+      .map((a) => ({
+        hex: a.hex,
+        name: (a.flight ?? "").trim() || a.r || a.hex.toUpperCase(),
+        lat: a.lat as number,
+        lon: a.lon as number,
+        alt: typeof a.alt_baro === "number" ? a.alt_baro : null,
+        track: typeof a.track === "number" ? a.track : null,
+        model: a.desc ?? a.t ?? null,
+      }));
+    return c.json(ac, 200, { "cache-control": "no-store" });
+  } catch {
+    return c.json([], 200);
+  }
 });
 
 app.get("/api/ais", async (c) => {
