@@ -11,6 +11,7 @@ import { nifcAdapter } from "./adapters/nifc";
 import { cneosAdapter } from "./adapters/cneos";
 import { adsbAdapter } from "./adapters/adsb";
 import { digitrafficAdapter } from "./adapters/digitraffic";
+import { launchAdapter } from "./adapters/launch";
 import { deriveLinks } from "./links";
 
 const ADAPTERS = [
@@ -23,6 +24,7 @@ const ADAPTERS = [
   cneosAdapter,
   adsbAdapter,
   digitrafficAdapter,
+  launchAdapter,
 ];
 
 // Fast-moving sources whose stale positions are misleading: pruned aggressively
