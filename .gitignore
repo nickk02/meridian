@@ -29,3 +29,13 @@ AGENTS.md
 /verify-*.mjs
 /poll-*.mjs
 /*.tmp.json
+
+# local scratch (screenshots, probes, temp data)
+/*.png
+/*.tmp.txt
+/*.tmp.csv
+/*.tmp.json
+/shot-*.mjs
+/verify-*.mjs
+/poll-*.mjs
+/probe*.mjs
