@@ -10,6 +10,8 @@ import type {
   Entity,
   EntityRef,
   Incident,
+  CrossIncident,
+  CrossMember,
 } from "../shared/types";
 
 function parseJson(value: unknown): Record<string, unknown> | null {
@@ -247,6 +249,58 @@ export async function getIncident(
   id: string,
 ): Promise<Incident | null> {
   return db.prepare("SELECT * FROM incidents WHERE id = ?").bind(id).first<Incident>();
+}
+
+interface CrossRow {
+  id: string;
+  label: string;
+  anchor_id: string;
+  centroid_lat: number;
+  centroid_lon: number;
+  t_start: number;
+  t_end: number;
+  member_count: number;
+  type_count: number;
+  severity_max: number;
+  types: string;
+  domains: string;
+  members: string;
+}
+
+function parseArr<T>(value: string): T[] {
+  try {
+    const v = JSON.parse(value);
+    return Array.isArray(v) ? (v as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function listCrossIncidents(
+  db: D1Database,
+  limit: number,
+): Promise<CrossIncident[]> {
+  const { results } = await db
+    .prepare(
+      "SELECT * FROM cross_incidents ORDER BY type_count DESC, member_count DESC, t_end DESC LIMIT ?",
+    )
+    .bind(limit)
+    .all<CrossRow>();
+  return results.map((r) => ({
+    id: r.id,
+    label: r.label,
+    anchor_id: r.anchor_id,
+    centroid_lat: r.centroid_lat,
+    centroid_lon: r.centroid_lon,
+    t_start: r.t_start,
+    t_end: r.t_end,
+    member_count: r.member_count,
+    type_count: r.type_count,
+    severity_max: r.severity_max,
+    types: parseArr<CrossIncident["types"][number]>(r.types),
+    domains: parseArr<CrossIncident["domains"][number]>(r.domains),
+    members: parseArr<CrossMember>(r.members),
+  }));
 }
 
 export async function getIncidentMembers(

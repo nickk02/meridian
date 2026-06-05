@@ -13,6 +13,7 @@ import {
   getEntity,
   getEntityEvents,
   listIncidents,
+  listCrossIncidents,
   getIncident,
   getIncidentMembers,
 } from "./repo";
@@ -93,6 +94,13 @@ app.get("/api/incidents", async (c) => {
   if (!d) return c.json(NO_DB, 503);
   const limit = clampLimit(c.req.query("limit"), 100, 500);
   return c.json(await listIncidents(d, limit));
+});
+
+app.get("/api/incidents/cross-domain", async (c) => {
+  const d = db(c);
+  if (!d) return c.json(NO_DB, 503);
+  const limit = clampLimit(c.req.query("limit"), 100, 500);
+  return c.json(await listCrossIncidents(d, limit));
 });
 
 app.get("/api/incident/:id", async (c) => {

@@ -52,7 +52,7 @@ export interface Ontology {
   refresh: () => void;
 }
 
-import type { Incident } from "../../shared/types";
+import type { Incident, CrossIncident } from "../../shared/types";
 
 // Incidents (correlation clusters), polled with the ontology cadence.
 export function useIncidents(pollMs = 60_000): Incident[] {
@@ -75,6 +75,29 @@ export function useIncidents(pollMs = 60_000): Incident[] {
     };
   }, [pollMs]);
   return incidents;
+}
+
+// Cross-domain incidents (co-causal cross-type co-occurrences), same cadence.
+export function useCrossIncidents(pollMs = 60_000): CrossIncident[] {
+  const [cross, setCross] = useState<CrossIncident[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/incidents/cross-domain?limit=200");
+        if (r.ok && alive) setCross((await r.json()) as CrossIncident[]);
+      } catch {
+        /* keep prior */
+      }
+    };
+    load();
+    const id = window.setInterval(load, pollMs);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [pollMs]);
+  return cross;
 }
 
 export interface ObjectDetail {
