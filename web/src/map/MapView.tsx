@@ -312,9 +312,9 @@ export function MapView(props: Props) {
           id: "sat-points",
           data: satPointsRef.current,
           getPosition: (d) => [d.lon, d.lat, d.altKm * 1000 * altScale],
-          getRadius: 2.4,
+          getRadius: 2.8,
           radiusUnits: "pixels",
-          radiusMinPixels: 1.6,
+          radiusMinPixels: 2,
           getFillColor: [234, 246, 255, 240],
           stroked: true,
           getLineColor: [120, 200, 240, 180],
@@ -670,7 +670,9 @@ export function MapView(props: Props) {
       // deck.gl overlay for the 3D altitude layers, interleaved so it composites
       // with the globe (back-of-globe sats are occluded by the earth via the
       // shared depth buffer).
-      const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
+      // pickingRadius widens the hit tolerance so the small sat dots are easy to
+      // hover/select despite being only a few pixels.
+      const overlay = new MapboxOverlay({ interleaved: true, pickingRadius: 6, layers: [] });
       map.addControl(overlay as unknown as maplibregl.IControl);
       deckRef.current = overlay;
 
