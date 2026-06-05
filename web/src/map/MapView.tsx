@@ -19,6 +19,10 @@ interface Props {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   newIds: Set<string>;
+  // Live-overlay visibility, owned by the on-map Layers control.
+  satsOn: boolean;
+  shipsOn: boolean;
+  planesOn: boolean;
 }
 
 const ANCHOR = new Set(["PORT", "CHOKEPOINT", "AIRPORT"]);
@@ -158,10 +162,10 @@ export function MapView(props: Props) {
   const [globe, setGlobe] = useState(true);
   const globeRef = useRef(globe);
   globeRef.current = globe;
-  const [satsOn, setSatsOn] = useState(true);
+  const satsOn = props.satsOn;
+  const shipsOn = props.shipsOn;
+  const planesOn = props.planesOn;
   const satsRef = useRef<Sat[]>([]);
-  const [shipsOn, setShipsOn] = useState(true);
-  const [planesOn, setPlanesOn] = useState(true);
 
   // Init once.
   useEffect(() => {
@@ -399,7 +403,7 @@ export function MapView(props: Props) {
       let popup: maplibregl.Popup | null = null;
       const overlayPopup = (lngLat: maplibregl.LngLat, kind: string, text: string) => {
         if (!popup) {
-          popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, className: "mer-map-popup", maxWidth: "240px" });
+          popup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, className: "mer-map-popup", maxWidth: "240px" });
         }
         popup
           .setLngLat(lngLat)
@@ -686,27 +690,6 @@ export function MapView(props: Props) {
         </button>
         <button className="mer-proj-btn mer-proj-reset" onClick={resetView}>
           RESET VIEW
-        </button>
-        <button
-          className={`mer-proj-btn ${satsOn ? "on" : ""}`}
-          onClick={() => setSatsOn((v) => !v)}
-          aria-pressed={satsOn}
-        >
-          SATS
-        </button>
-        <button
-          className={`mer-proj-btn ${shipsOn ? "on" : ""}`}
-          onClick={() => setShipsOn((v) => !v)}
-          aria-pressed={shipsOn}
-        >
-          SHIPS
-        </button>
-        <button
-          className={`mer-proj-btn ${planesOn ? "on" : ""}`}
-          onClick={() => setPlanesOn((v) => !v)}
-          aria-pressed={planesOn}
-        >
-          PLANES
         </button>
       </div>
     </div>

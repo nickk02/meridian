@@ -14,7 +14,7 @@ import {
 import type { ObjectType } from "../../shared/types";
 import { useOntology, useUtcClock, useIsMobile, useIncidents, useCrossIncidents } from "./hooks";
 import { MapView } from "./map/MapView";
-import { LayerTree } from "./components/LayerTree";
+import { LayerControl } from "./components/LayerControl";
 import { Inspector } from "./components/Inspector";
 import { GraphView } from "./components/GraphView";
 import { FeedView } from "./components/FeedView";
@@ -36,6 +36,10 @@ export function App() {
   const [logOpen, setLogOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [booting, setBooting] = useState(true);
+  // Live-overlay visibility, owned here so the Layers control and the map share it.
+  const [satsOn, setSatsOn] = useState(true);
+  const [shipsOn, setShipsOn] = useState(true);
+  const [planesOn, setPlanesOn] = useState(true);
 
   useEffect(() => {
     const id = window.setTimeout(() => setBooting(false), 3100);
@@ -75,30 +79,38 @@ export function App() {
     });
   const onActed = () => setActivityVersion((v) => v + 1);
 
-  const layerTree = onto.loaded ? (
-    <LayerTree
-      types={onto.types}
-      counts={counts}
-      visible={visible}
-      onToggle={toggle}
-      severityMin={severityMin}
-      onSeverityMin={setSeverityMin}
-      shown={shownCount}
-      total={onto.objects.length}
-    />
-  ) : (
-    <>
-      <div className="mer-section-head">
-        <span>Ontology Layers</span>
-        <Icon icon="layers" size={12} />
+  const layerControl = (collapsible: boolean) =>
+    onto.loaded ? (
+      <LayerControl
+        types={onto.types}
+        counts={counts}
+        visible={visible}
+        onToggle={toggle}
+        severityMin={severityMin}
+        onSeverityMin={setSeverityMin}
+        shown={shownCount}
+        total={onto.objects.length}
+        satsOn={satsOn}
+        shipsOn={shipsOn}
+        planesOn={planesOn}
+        onToggleSats={() => setSatsOn((v) => !v)}
+        onToggleShips={() => setShipsOn((v) => !v)}
+        onTogglePlanes={() => setPlanesOn((v) => !v)}
+        collapsible={collapsible}
+      />
+    ) : (
+      <div className="mer-layerctrl">
+        <div className="mer-layerctrl-head">
+          <Icon icon="layers" size={13} />
+          <span>LAYERS</span>
+        </div>
+        <div className="mer-empty">
+          {onto.status === "down"
+            ? "Feed unavailable. The data API is not bound yet."
+            : "Loading ontology..."}
+        </div>
       </div>
-      <div className="mer-empty">
-        {onto.status === "down"
-          ? "Feed unavailable. The data API is not bound yet."
-          : "Loading ontology..."}
-      </div>
-    </>
-  );
+    );
 
   const inspector = (
     <Inspector selectedId={selectedId} typeMap={typeMap} onSelect={setSelectedId} onActed={onActed} />
@@ -113,15 +125,21 @@ export function App() {
       </Tabs>
       <div className="mer-center-body">
         {tab === "map" ? (
-          <MapView
-            objects={onto.objects}
-            links={onto.links}
-            visibleTypes={visible}
-            severityMin={severityMin}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            newIds={onto.newIds}
-          />
+          <>
+            <MapView
+              objects={onto.objects}
+              links={onto.links}
+              visibleTypes={visible}
+              severityMin={severityMin}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              newIds={onto.newIds}
+              satsOn={satsOn}
+              shipsOn={shipsOn}
+              planesOn={planesOn}
+            />
+            {!isMobile && <div className="mer-layerctrl-overlay">{layerControl(true)}</div>}
+          </>
         ) : tab === "feed" ? (
           <FeedView
             objects={onto.objects}
@@ -211,9 +229,9 @@ export function App() {
             position="left"
             size={DrawerSize.SMALL}
             className="bp5-dark mer-drawer"
-            title="Ontology"
+            title="Layers"
           >
-            <div className="mer-drawer-body">{layerTree}</div>
+            <div className="mer-drawer-body">{layerControl(false)}</div>
           </Drawer>
 
           <Drawer
@@ -243,7 +261,6 @@ export function App() {
       ) : (
         <>
           <div className="mer-body">
-            <aside className="mer-rail">{layerTree}</aside>
             {center}
             <aside className="mer-inspector">{inspector}</aside>
           </div>
