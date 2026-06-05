@@ -10,6 +10,7 @@ import { nhcAdapter } from "./adapters/nhc";
 import { nifcAdapter } from "./adapters/nifc";
 import { cneosAdapter } from "./adapters/cneos";
 import { adsbAdapter } from "./adapters/adsb";
+import { digitrafficAdapter } from "./adapters/digitraffic";
 import { deriveLinks } from "./links";
 
 const ADAPTERS = [
@@ -21,11 +22,12 @@ const ADAPTERS = [
   nifcAdapter,
   cneosAdapter,
   adsbAdapter,
+  digitrafficAdapter,
 ];
 
 // Fast-moving sources whose stale positions are misleading: pruned aggressively
-// so a landed aircraft drops off the map within the hour.
-const FAST_SOURCES = ["airplanes"];
+// so a landed aircraft or departed vessel drops off the map within the hour.
+const FAST_SOURCES = ["airplanes", "digitraffic"];
 const FAST_PRUNE_MS = 60 * 60 * 1000;
 
 export interface IngestResult {
