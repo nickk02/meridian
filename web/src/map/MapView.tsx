@@ -7,9 +7,9 @@ import type { OntologyObject, OntologyLink } from "../../../shared/types";
 import { isValidCoord } from "../../../shared/coords";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Layer } from "@deck.gl/core";
-import { ScatterplotLayer, PathLayer } from "@deck.gl/layers";
+import { ScatterplotLayer, PathLayer, IconLayer } from "@deck.gl/layers";
 import { darkBasemap } from "./style";
-import { addMapIcons, ICON_IMAGE } from "./icons";
+import { addMapIcons, ICON_IMAGE, loadSatelliteImage } from "./icons";
 import {
   fetchSats,
   propagateSatsRaw,
@@ -236,6 +236,7 @@ export function MapView(props: Props) {
   // The hovered/selected satellite, if any: only its orbital arc is drawn.
   const hoverSatRef = useRef<SatPoint | null>(null);
   const selectSatRef = useRef<SatPoint | null>(null);
+  const satIconRef = useRef<string | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
 
   // Shared identity popup for live overlays (used by both the MapLibre click
@@ -307,23 +308,42 @@ export function MapView(props: Props) {
           }),
         );
       }
-      layers.push(
-        new ScatterplotLayer<SatPoint>({
-          id: "sat-points",
-          data: satPointsRef.current,
-          getPosition: (d) => [d.lon, d.lat, d.altKm * 1000 * altScale],
-          getRadius: 2.8,
-          radiusUnits: "pixels",
-          radiusMinPixels: 2,
-          getFillColor: [234, 246, 255, 240],
-          stroked: true,
-          getLineColor: [120, 200, 240, 180],
-          lineWidthUnits: "pixels",
-          lineWidthMinPixels: 0.5,
-          pickable: true,
-          parameters: { depthCompare: "less-equal" },
-        }),
-      );
+      // The satellite glyph, billboarded (always faces the camera) at true
+      // orbital altitude. A mask icon tinted at runtime, so it reads as a
+      // satellite, not a bare dot. Falls back to a dot until the image loads.
+      if (satIconRef.current) {
+        layers.push(
+          new IconLayer<SatPoint>({
+            id: "sat-points",
+            data: satPointsRef.current,
+            getPosition: (d) => [d.lon, d.lat, d.altKm * 1000 * altScale],
+            getIcon: () => "sat",
+            iconAtlas: satIconRef.current,
+            iconMapping: { sat: { x: 0, y: 0, width: 64, height: 64, anchorX: 32, anchorY: 32, mask: true } },
+            getSize: 15,
+            sizeUnits: "pixels",
+            sizeMinPixels: 9,
+            getColor: [234, 246, 255, 245],
+            billboard: true,
+            pickable: true,
+            parameters: { depthCompare: "less-equal" },
+          }),
+        );
+      } else {
+        layers.push(
+          new ScatterplotLayer<SatPoint>({
+            id: "sat-points",
+            data: satPointsRef.current,
+            getPosition: (d) => [d.lon, d.lat, d.altKm * 1000 * altScale],
+            getRadius: 2.8,
+            radiusUnits: "pixels",
+            radiusMinPixels: 2,
+            getFillColor: [234, 246, 255, 240],
+            pickable: true,
+            parameters: { depthCompare: "less-equal" },
+          }),
+        );
+      }
     }
     overlay.setProps({ layers });
   }, []);
@@ -723,6 +743,24 @@ export function MapView(props: Props) {
   }
 
   useEffect(syncData);
+
+  // Rasterize the satellite glyph once, then rebuild the deck layers so the sats
+  // switch from the fallback dot to the billboarded icon.
+  useEffect(() => {
+    let alive = true;
+    loadSatelliteImage()
+      .then((img) => {
+        if (!alive) return;
+        satIconRef.current = img;
+        buildDeck();
+      })
+      .catch(() => {
+        /* keep the dot fallback if rasterization fails */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [buildDeck]);
 
   // Load TLEs once on mount, refresh hourly. An orbit arc is now computed on
   // demand only for the hovered/selected sat, so the load just propagates the
