@@ -270,16 +270,33 @@ export function MapView(props: Props) {
             id: "sat-orbits",
             data: orbitsRef.current,
             getPath: (d) => d.path,
-            getColor: [96, 206, 232, 64],
-            getWidth: 1.2,
+            getColor: [110, 214, 240, 130],
+            getWidth: 1.4,
             widthUnits: "pixels",
-            widthMinPixels: 1,
+            widthMinPixels: 1.1,
             jointRounded: true,
             capRounded: true,
             // Test against the globe's depth so back-of-globe arcs are occluded;
             // do not write depth (translucent overlapping arcs blend cleanly).
             parameters: { depthCompare: "less-equal", depthWriteEnabled: false },
             pickable: false,
+          }),
+        );
+      }
+      // Soft halo behind each sat so the orbital shell reads against space.
+      if (onGlobe) {
+        layers.push(
+          new ScatterplotLayer<SatPoint>({
+            id: "sat-glow",
+            data: satPointsRef.current,
+            getPosition: (d) => [d.lon, d.lat, d.altKm * 1000 * altScale],
+            getRadius: 5,
+            radiusUnits: "pixels",
+            radiusMinPixels: 3,
+            getFillColor: [150, 220, 255, 45],
+            stroked: false,
+            pickable: false,
+            parameters: { depthCompare: "less-equal", depthWriteEnabled: false },
           }),
         );
       }
@@ -290,10 +307,10 @@ export function MapView(props: Props) {
           getPosition: (d) => [d.lon, d.lat, d.altKm * 1000 * altScale],
           getRadius: 2.4,
           radiusUnits: "pixels",
-          radiusMinPixels: 1.5,
-          getFillColor: [234, 246, 255, 235],
+          radiusMinPixels: 1.6,
+          getFillColor: [234, 246, 255, 240],
           stroked: true,
-          getLineColor: [120, 200, 240, 170],
+          getLineColor: [120, 200, 240, 180],
           lineWidthUnits: "pixels",
           lineWidthMinPixels: 0.5,
           pickable: true,
