@@ -135,6 +135,35 @@ export interface Incident {
   created_ts: number;
 }
 
+// Cross-domain incident (Stage G): events of different types that co-occur in
+// space and time AND share a plausible mechanism. Members carry their distance
+// and time offset from the anchor as the per-link basis.
+export interface CrossMember {
+  id: string;
+  name: string;
+  domain: Domain;
+  type: ObjectTypeId;
+  severity: number;
+  km: number;
+  dtHr: number;
+}
+
+export interface CrossIncident {
+  id: string;
+  label: string;
+  anchor_id: string;
+  centroid_lat: number;
+  centroid_lon: number;
+  t_start: number;
+  t_end: number;
+  member_count: number;
+  type_count: number;
+  severity_max: number;
+  types: ObjectTypeId[];
+  domains: Domain[];
+  members: CrossMember[];
+}
+
 export interface HealthResponse {
   ok: boolean;
 }

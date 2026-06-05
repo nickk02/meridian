@@ -12,7 +12,7 @@ import {
   DrawerSize,
 } from "@blueprintjs/core";
 import type { ObjectType } from "../../shared/types";
-import { useOntology, useUtcClock, useIsMobile, useIncidents } from "./hooks";
+import { useOntology, useUtcClock, useIsMobile, useIncidents, useCrossIncidents } from "./hooks";
 import { MapView } from "./map/MapView";
 import { LayerTree } from "./components/LayerTree";
 import { Inspector } from "./components/Inspector";
@@ -25,6 +25,7 @@ export function App() {
   const clock = useUtcClock();
   const onto = useOntology();
   const incidents = useIncidents();
+  const crossIncidents = useCrossIncidents();
   const isMobile = useIsMobile();
   const [visible, setVisible] = useState<Set<string>>(new Set());
   const [severityMin, setSeverityMin] = useState(1);
@@ -124,6 +125,7 @@ export function App() {
           <FeedView
             objects={onto.objects}
             incidents={incidents}
+            crossIncidents={crossIncidents}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />

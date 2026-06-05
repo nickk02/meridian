@@ -177,25 +177,154 @@ export function computeIncidents(events: EvtPt[]): Incident[] {
   return incidents;
 }
 
+// Cross-domain correlation: events of DIFFERENT types that co-occur in space and
+// time AND have a plausible shared mechanism. Naive proximity is coincidence (a
+// wildfire near a quake swarm means nothing), so membership is gated to an
+// explicit co-causal whitelist. A group surfaces only when it spans 2+ types.
+// The human judges real-versus-coincidence from the members and their bases.
+const CROSS_PARAM = { epsKm: 100, minPts: 2 };
+const CROSS_TYPES = new Set(["STORM", "FLOOD", "ALERT", "VOLCANO", "SEISMIC", "WILDFIRE", "DROUGHT"]);
+
+// The plausible-shared-mechanism check, returning the TIME WINDOW (hours) the two
+// events may be apart and still be related, or 0 if there is no mechanism. The
+// window is the phenomenon's active duration: a volcano drives seismicity for
+// weeks, a drought feeds fires for months, a storm's floods land within days, a
+// tsunami follows its quake within hours. A flat window would either miss the
+// long-lived disasters or let short-lived alerts pair with anything. (Unordered.)
+function coCausalWindowHr(a: EvtPt, b: EvtPt): number {
+  const has = (x: string, y: string) =>
+    (a.type === x && b.type === y) || (a.type === y && b.type === x);
+  if (has("VOLCANO", "SEISMIC")) return 720; // volcano active for weeks
+  if (has("WILDFIRE", "DROUGHT")) return 720; // drought persists for months
+  if (has("STORM", "FLOOD")) return 168; // storm and the floods it drives, days
+  if (has("STORM", "ALERT") || has("FLOOD", "ALERT")) return 72; // alerts are shorter-lived
+  if (has("SEISMIC", "ALERT")) {
+    const alert = a.type === "ALERT" ? a : b;
+    return /tsunami/i.test(alert.name) ? 12 : 0; // tsunami follows its quake within hours
+  }
+  return 0;
+}
+
+export interface CrossMember extends IncMember {
+  name: string;
+  domain: string;
+  type: string;
+  severity: number;
+}
+
+export interface CrossIncident {
+  id: string;
+  label: string;
+  anchorId: string;
+  centroid_lat: number;
+  centroid_lon: number;
+  t_start: number;
+  t_end: number;
+  member_count: number;
+  type_count: number;
+  severity_max: number;
+  types: string[];
+  domains: string[];
+  members: CrossMember[];
+}
+
+export function computeCrossDomain(events: EvtPt[]): CrossIncident[] {
+  const pts = events.filter(
+    (e) => CROSS_TYPES.has(e.type) && !(e.type === "WILDFIRE" && /prescribed|\brx[\s-]/i.test(e.name)),
+  );
+  const p = CROSS_PARAM;
+  const order = pts
+    .map((_, i) => i)
+    .sort(
+      (a, b) =>
+        pts[b].severity - pts[a].severity ||
+        pts[a].ts - pts[b].ts ||
+        (pts[a].id < pts[b].id ? -1 : pts[a].id > pts[b].id ? 1 : 0),
+    );
+  const latOrder = pts.map((_, i) => i).sort((a, b) => pts[a].lat - pts[b].lat);
+  const lats = latOrder.map((i) => pts[i].lat);
+  const degBand = p.epsKm / 110;
+  const taken = new Array(pts.length).fill(false);
+
+  const out: CrossIncident[] = [];
+  for (const ai of order) {
+    if (taken[ai]) continue;
+    const a = pts[ai];
+    const lo = lowerBound(lats, a.lat - degBand);
+    const hi = lowerBound(lats, a.lat + degBand + 1e-9);
+    const members: { idx: number; km: number; dtHr: number }[] = [{ idx: ai, km: 0, dtHr: 0 }];
+    for (let q = lo; q < hi; q++) {
+      const j = latOrder[q];
+      if (j === ai || taken[j]) continue;
+      const b = pts[j];
+      const winHr = coCausalWindowHr(a, b);
+      if (winHr <= 0) continue;
+      const dt = Math.abs(a.ts - b.ts);
+      if (dt > winHr * 3600_000) continue;
+      const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+      if (km > p.epsKm) continue;
+      members.push({ idx: j, km, dtHr: dt / 3600_000 });
+    }
+    if (members.length < p.minPts) continue;
+    const types = [...new Set(members.map((m) => pts[m.idx].type))];
+    if (types.length < 2) continue; // must be genuinely cross-type
+    for (const m of members) taken[m.idx] = true;
+    const pm = members.map((m) => pts[m.idx]);
+    out.push({
+      id: `XINC-${a.id}`,
+      label: `${a.name} + ${members.length - 1}`,
+      anchorId: a.id,
+      centroid_lat: round(pm.reduce((s, m) => s + m.lat, 0) / pm.length, 4),
+      centroid_lon: round(pm.reduce((s, m) => s + m.lon, 0) / pm.length, 4),
+      t_start: Math.min(...pm.map((m) => m.ts)),
+      t_end: Math.max(...pm.map((m) => m.ts)),
+      member_count: members.length,
+      type_count: types.length,
+      severity_max: Math.max(...pm.map((m) => m.severity)),
+      types,
+      domains: [...new Set(pm.map((m) => m.domain))],
+      members: members.map((m) => ({
+        id: pts[m.idx].id,
+        name: pts[m.idx].name,
+        domain: pts[m.idx].domain,
+        type: pts[m.idx].type,
+        severity: pts[m.idx].severity,
+        km: round(m.km, 1),
+        dtHr: round(m.dtHr, 1),
+      })),
+    });
+  }
+  return out;
+}
+
 export async function correlate(
   db: D1Database,
   now: number,
-): Promise<{ incidents: number; correlatedLinks: number }> {
-  const placeholders = CLUSTER_TYPES.map(() => "?").join(",");
+): Promise<{ incidents: number; correlatedLinks: number; crossIncidents: number }> {
+  // Fetch the union of types both clusterers need: same-type clustering uses
+  // CLUSTER_TYPES, cross-domain uses CROSS_TYPES (which adds STORM, VOLCANO,
+  // DROUGHT). Each function filters to its own set, so the superset is safe.
+  const fetchTypes = [...new Set([...CLUSTER_TYPES, ...CROSS_TYPES])];
+  const placeholders = fetchTypes.map(() => "?").join(",");
   const { results } = await db
     .prepare(
       `SELECT id, type, domain, name, lat, lon, ts, severity FROM objects
         WHERE type IN (${placeholders})`,
     )
-    .bind(...CLUSTER_TYPES)
+    .bind(...fetchTypes)
     .all<EvtPt>();
   const incidents = computeIncidents(results);
+  const cross = computeCrossDomain(results);
 
-  // Full rebuild: clear prior assignments and correlated links.
+  // Full rebuild: clear prior assignments, correlated links, and both incident
+  // tables before reinserting.
   await db.prepare("UPDATE objects SET incident_id = NULL WHERE incident_id IS NOT NULL").run();
   await db.prepare("DELETE FROM incidents").run();
   await db.prepare("DELETE FROM links WHERE kind = 'CORRELATED_WITH'").run();
-  if (incidents.length === 0) return { incidents: 0, correlatedLinks: 0 };
+  await db.prepare("DELETE FROM cross_incidents").run();
+
+  await writeCrossIncidents(db, cross, now);
+  if (incidents.length === 0) return { incidents: 0, correlatedLinks: 0, crossIncidents: cross.length };
 
   const incStmt = db.prepare(
     `INSERT INTO incidents (id, label, domain, centroid_lat, centroid_lon,
@@ -237,5 +366,25 @@ export async function correlate(
     }
     for (let i = 0; i < batch.length; i += 50) await db.batch(batch.slice(i, i + 50));
   }
-  return { incidents: incidents.length, correlatedLinks };
+  return { incidents: incidents.length, correlatedLinks, crossIncidents: cross.length };
+}
+
+// Persist cross-domain incidents. Self-contained rows (types/domains/members as
+// JSON) read straight into the feed; the table is cleared by the caller first.
+async function writeCrossIncidents(db: D1Database, cross: CrossIncident[], now: number): Promise<void> {
+  if (cross.length === 0) return;
+  const stmt = db.prepare(
+    `INSERT INTO cross_incidents
+       (id, label, anchor_id, centroid_lat, centroid_lon, t_start, t_end,
+        member_count, type_count, severity_max, types, domains, members, created_ts)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)`,
+  );
+  const batch = cross.map((x) =>
+    stmt.bind(
+      x.id, x.label, x.anchorId, x.centroid_lat, x.centroid_lon, x.t_start, x.t_end,
+      x.member_count, x.type_count, x.severity_max,
+      JSON.stringify(x.types), JSON.stringify(x.domains), JSON.stringify(x.members), now,
+    ),
+  );
+  for (let i = 0; i < batch.length; i += 50) await db.batch(batch.slice(i, i + 50));
 }

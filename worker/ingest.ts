@@ -120,6 +120,7 @@ export interface IngestResult {
   entityLinks: number;
   incidents: number;
   correlatedLinks: number;
+  crossIncidents: number;
 }
 
 // Object ingest runs every cron (15 min) for fresh dots, but link rebuild is
@@ -271,6 +272,7 @@ export async function runIngest(
   let links = -1;
   let incidents = 0;
   let correlatedLinks = 0;
+  let crossIncidents = 0;
   const last = await db
     .prepare("SELECT MAX(created_ts) AS m FROM links WHERE kind != 'CORRELATED_WITH'")
     .first<{ m: number | null }>();
@@ -279,6 +281,7 @@ export async function runIngest(
     const corr = await correlate(db, ran);
     incidents = corr.incidents;
     correlatedLinks = corr.correlatedLinks;
+    crossIncidents = corr.crossIncidents;
   }
 
   return {
@@ -293,5 +296,6 @@ export async function runIngest(
     entityLinks: ents.links,
     incidents,
     correlatedLinks,
+    crossIncidents,
   };
 }
