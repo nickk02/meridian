@@ -89,6 +89,7 @@ export class AisCollector extends DurableObject<Env> {
     const positions = new Map<string, Pos>();
     let total = 0;
     let sample = "";
+    let firstType = "";
     let closeInfo = "";
     await new Promise<void>((resolve) => {
       let settled = false;
@@ -106,15 +107,21 @@ export class AisCollector extends DurableObject<Env> {
       const timer = setTimeout(finish, COLLECT_WINDOW_MS);
       ws.addEventListener("message", (ev) => {
         try {
+          const raw: unknown = ev.data;
           // aisstream sends JSON in BINARY (ArrayBuffer) frames, not text.
           const data =
-            typeof ev.data === "string"
-              ? ev.data
-              : ev.data instanceof ArrayBuffer
-                ? new TextDecoder().decode(ev.data)
-                : "";
+            typeof raw === "string"
+              ? raw
+              : raw instanceof ArrayBuffer
+                ? new TextDecoder().decode(raw)
+                : ArrayBuffer.isView(raw)
+                  ? new TextDecoder().decode(raw as ArrayBufferView)
+                  : "";
           total++;
-          if (total <= 1) sample = data.slice(0, 240);
+          if (total <= 1) {
+            firstType = `${typeof raw}/${(raw as { constructor?: { name?: string } })?.constructor?.name ?? "?"}`;
+            sample = data.slice(0, 240);
+          }
           const msg = JSON.parse(data) as {
             MessageType?: string;
             MetaData?: { MMSI?: number; ShipName?: string; latitude?: number; longitude?: number };
@@ -149,7 +156,7 @@ export class AisCollector extends DurableObject<Env> {
       );
     });
 
-    this.setMeta({ opened: true, total, kept: positions.size, sample, closeInfo });
+    this.setMeta({ opened: true, total, kept: positions.size, firstType, sample, closeInfo });
 
     for (const [mmsi, p] of positions) {
       this.ctx.storage.sql.exec(
