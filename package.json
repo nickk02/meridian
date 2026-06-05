@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "deploy": "wrangler deploy",
     "migrate:local": "wrangler d1 migrations apply DB --config wrangler.local.jsonc --local",
-    "migrate:remote": "wrangler d1 migrations apply meridian --remote"
+    "migrate:remote": "wrangler d1 migrations apply meridian-db --remote"
   },
   "dependencies": {
     "@blueprintjs/core": "^5.16.0",
