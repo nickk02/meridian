@@ -7,9 +7,17 @@ import { eonetAdapter } from "./adapters/eonet";
 import { gdacsAdapter } from "./adapters/gdacs";
 import { nwsAdapter } from "./adapters/nws";
 import { nhcAdapter } from "./adapters/nhc";
+import { nifcAdapter } from "./adapters/nifc";
 import { deriveLinks } from "./links";
 
-const ADAPTERS = [usgsAdapter, eonetAdapter, gdacsAdapter, nwsAdapter, nhcAdapter];
+const ADAPTERS = [
+  usgsAdapter,
+  eonetAdapter,
+  gdacsAdapter,
+  nwsAdapter,
+  nhcAdapter,
+  nifcAdapter,
+];
 
 export interface IngestResult {
   ran: number;
