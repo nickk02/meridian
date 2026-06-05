@@ -11,6 +11,7 @@ import type { OntologyObject, OntologyLink } from "../../../shared/types";
 import { isValidCoord } from "../../../shared/coords";
 import { darkBasemap } from "./style";
 import { fetchSats, propagateSats, type Sat } from "./satellites";
+import { computeTerminator } from "./terminator";
 
 interface Props {
   objects: OntologyObject[];
@@ -190,6 +191,17 @@ export function MapView(props: Props) {
           easing: (t) => 1 - Math.pow(1 - t, 3),
         });
       }
+      // Day-night terminator: a dark fill over the night hemisphere, beneath all
+      // data layers so events and satellites stay readable. Updated on a slow
+      // interval (the terminator drifts ~15 deg/hour).
+      map.addSource("daynight", { type: "geojson", data: computeTerminator(new Date()) });
+      map.addLayer({
+        id: "daynight",
+        type: "fill",
+        source: "daynight",
+        paint: { "fill-color": "#01030a", "fill-opacity": 0.4 },
+      });
+
       map.addSource("links", { type: "geojson", data: emptyFc() });
       map.addSource("objects", { type: "geojson", data: emptyFc() });
       map.addSource("selected", { type: "geojson", data: emptyFc() });
@@ -414,6 +426,17 @@ export function MapView(props: Props) {
     const id = window.setInterval(tick, 2000);
     return () => window.clearInterval(id);
   }, [satsOn]);
+
+  // Drift the day-night terminator (recompute once a minute).
+  useEffect(() => {
+    const update = () => {
+      const map = mapRef.current;
+      if (!map || !readyRef.current) return;
+      (map.getSource("daynight") as GeoJSONSource | undefined)?.setData(computeTerminator(new Date()));
+    };
+    const id = window.setInterval(update, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // Toggle projection after init. Either way the camera returns upright
   // (bearing 0, pitch 0) so the poles stay vertical.
