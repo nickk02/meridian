@@ -29,7 +29,7 @@ interface Props {
 const CATEGORIES: { key: string; label: string; types: ObjectTypeId[] }[] = [
   { key: "geo", label: "Seismic & Volcanic", types: ["SEISMIC", "VOLCANO"] },
   { key: "hazard", label: "Weather & Hazard", types: ["STORM", "FLOOD", "DROUGHT", "ALERT", "WILDFIRE", "ICE"] },
-  { key: "transport", label: "Air & Maritime", types: ["AIRCRAFT", "VESSEL", "AIRPORT", "PORT", "CHOKEPOINT"] },
+  { key: "transport", label: "Infrastructure", types: ["AIRPORT", "PORT", "CHOKEPOINT"] },
   { key: "space", label: "Space", types: ["FIREBALL", "LAUNCH"] },
   { key: "other", label: "Other", types: ["NEWS_EVENT"] },
 ];
