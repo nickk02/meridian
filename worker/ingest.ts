@@ -4,7 +4,7 @@
 import type { IngestObject } from "./adapters/types";
 import type { Domain } from "../shared/types";
 import { isValidCoord } from "../shared/coords";
-import { usgsAdapter } from "./adapters/usgs";
+import { usgsAdapter, usgsSigAdapter } from "./adapters/usgs";
 import { eonetAdapter } from "./adapters/eonet";
 import { gdacsAdapter } from "./adapters/gdacs";
 import { nwsAdapter } from "./adapters/nws";
@@ -32,11 +32,13 @@ const ADAPTERS = [
   digitrafficAdapter,
   launchAdapter,
   firmsAdapter,
+  usgsSigAdapter,
 ];
 
-// Keyed feeds that only run on the gated (hourly) cycle, to bound their write
-// cost. FIRMS in particular is high-volume, so it skips the 15-min cron.
-const GATED_SOURCES = new Set(["firms"]);
+// Feeds that only run on the gated (hourly) cycle, to bound their write cost.
+// FIRMS is high-volume; the USGS 30-day significant feed is slow-changing, so
+// neither needs the 15-min cron.
+const GATED_SOURCES = new Set(["firms", "usgs_sig"]);
 
 // Every source maps to exactly one domain (Stage A). Objects inherit their
 // adapter's domain, so a scope is just a domain filter.
@@ -52,11 +54,12 @@ const SOURCE_DOMAIN: Record<string, Domain> = {
   digitraffic: "maritime",
   launchlibrary: "space",
   firms: "environmental",
+  usgs_sig: "seismic",
 };
 
 // Static per-source reliability for the confidence score (Stage D).
 const RELIABILITY: Record<string, number> = {
-  usgs: 0.98, nws: 0.97, nhc: 0.97, nifc: 0.95, eonet: 0.95,
+  usgs: 0.98, usgs_sig: 0.98, nws: 0.97, nhc: 0.97, nifc: 0.95, eonet: 0.95,
   gdacs: 0.95, cneos: 0.95, launchlibrary: 0.9,
   airplanes: 0.85, digitraffic: 0.85, firms: 0.8,
 };
@@ -64,6 +67,7 @@ const RELIABILITY: Record<string, number> = {
 // Fallback source endpoint when a feed item has no per-event URL.
 const SOURCE_URL: Record<string, string> = {
   usgs: "https://earthquake.usgs.gov/earthquakes/",
+  usgs_sig: "https://earthquake.usgs.gov/earthquakes/",
   eonet: "https://eonet.gsfc.nasa.gov/",
   gdacs: "https://www.gdacs.org/",
   nws: "https://www.weather.gov/",
