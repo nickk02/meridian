@@ -322,25 +322,11 @@ export function MapView(props: Props) {
           lineWidthMinPixels: 0.5,
           pickable: true,
           parameters: { depthCompare: "less-equal" },
-          // Hover draws that sat's orbit; rebuild only when the identity changes
-          // so a steady hover does not thrash the layer every pointer move.
-          onHover: (info) => {
-            const d = (info.object as SatPoint | undefined) ?? null;
-            if ((d?.name ?? null) !== (hoverSatRef.current?.name ?? null)) {
-              hoverSatRef.current = d;
-              buildDeckRef.current?.();
-            }
-            return false;
-          },
         }),
       );
     }
     overlay.setProps({ layers });
   }, []);
-  // buildDeck calls itself from a deck callback, so route through a ref to avoid
-  // a stale closure and a self-referential useCallback dependency.
-  const buildDeckRef = useRef(buildDeck);
-  buildDeckRef.current = buildDeck;
 
   // Init once.
   useEffect(() => {
@@ -659,12 +645,28 @@ export function MapView(props: Props) {
         }
         onSelectRef.current(null);
       });
-      // Pointer cursor over any clickable feature.
+      // Pointer cursor over any clickable feature, and hover-to-show a satellite's
+      // orbit. Satellites are deck.gl objects, so we hit-test them via the overlay
+      // (deck's own onHover does not fire reliably in interleaved mode). Throttled
+      // so the per-move GPU pick does not run every pointer event.
+      let lastPick = 0;
       map.on("mousemove", (e) => {
         const over = map.queryRenderedFeatures(boxAt(e.point.x, e.point.y), {
           layers: ["objects", "objects-symbols", "aircraft", "ais", "ais-symbols"],
         }).length > 0;
-        map.getCanvas().style.cursor = over ? "pointer" : "";
+        const now = e.originalEvent.timeStamp || Date.now();
+        let onSat = false;
+        if (now - lastPick >= 40) {
+          lastPick = now;
+          const info = deckRef.current?.pickObject({ x: e.point.x, y: e.point.y, radius: 6, layerIds: ["sat-points"] });
+          const d = (info?.object as SatPoint | undefined) ?? null;
+          onSat = !!d;
+          if ((d?.name ?? null) !== (hoverSatRef.current?.name ?? null)) {
+            hoverSatRef.current = d;
+            buildDeck();
+          }
+        }
+        map.getCanvas().style.cursor = over || onSat || hoverSatRef.current ? "pointer" : "";
       });
 
       // deck.gl overlay for the 3D altitude layers, interleaved so it composites
