@@ -16,6 +16,7 @@ import { cneosAdapter } from "./adapters/cneos";
 // live client overlays instead (see /api/aircraft and the global AIS overlay).
 import { launchAdapter } from "./adapters/launch";
 import { firmsAdapter } from "./adapters/firms";
+import { capAlertHubAdapter } from "./adapters/capAlertHub";
 import { deriveLinks } from "./links";
 import { resolveEntities } from "./entities";
 import { countryAt } from "./geo/reverse";
@@ -32,12 +33,14 @@ const ADAPTERS = [
   launchAdapter,
   firmsAdapter,
   usgsSigAdapter,
+  capAlertHubAdapter,
 ];
 
 // Feeds that only run on the gated (hourly) cycle, to bound their write cost.
-// FIRMS is high-volume; the USGS 30-day significant feed is slow-changing, so
-// neither needs the 15-min cron.
-const GATED_SOURCES = new Set(["firms", "usgs_sig"]);
+// FIRMS is high-volume; the USGS 30-day significant feed is slow-changing; the
+// CAP Alert Hub aggregator is three paginated GraphQL calls, so none of them
+// need the 15-min cron.
+const GATED_SOURCES = new Set(["firms", "usgs_sig", "cap_alerthub"]);
 
 // Every source maps to exactly one domain (Stage A). Objects inherit their
 // adapter's domain, so a scope is just a domain filter.
@@ -54,12 +57,13 @@ const SOURCE_DOMAIN: Record<string, Domain> = {
   launchlibrary: "space",
   firms: "environmental",
   usgs_sig: "seismic",
+  cap_alerthub: "environmental",
 };
 
 // Static per-source reliability for the confidence score (Stage D).
 const RELIABILITY: Record<string, number> = {
   usgs: 0.98, usgs_sig: 0.98, nws: 0.97, nhc: 0.97, nifc: 0.95, eonet: 0.95,
-  gdacs: 0.95, cneos: 0.95, launchlibrary: 0.9,
+  gdacs: 0.95, cneos: 0.95, launchlibrary: 0.9, cap_alerthub: 0.9,
   airplanes: 0.85, digitraffic: 0.85, firms: 0.8,
 };
 
@@ -77,6 +81,7 @@ const SOURCE_URL: Record<string, string> = {
   digitraffic: "https://www.digitraffic.fi/en/marine-traffic/",
   launchlibrary: "https://thespacedevs.com/llapi",
   firms: "https://firms.modaps.eosdis.nasa.gov/",
+  cap_alerthub: "https://alerthub.ifrc.org/",
 };
 
 // confidence = reliability x recency. Recency decays linearly over a week to a
