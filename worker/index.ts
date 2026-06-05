@@ -144,8 +144,8 @@ app.get("/api/ais", async (c) => {
   if (!ns) return c.json([], 200);
   // Singleton collector instance; the first hit also starts its alarm windows.
   const stub = ns.get(ns.idFromName("global"));
-  const debug = c.req.query("debug") != null ? "?debug=1" : "";
-  const resp = await stub.fetch(`https://ais/snapshot${debug}`);
+  const qs = c.req.query("debug") != null ? "?debug=1" : c.req.query("run") != null ? "?run=1" : "";
+  const resp = await stub.fetch(`https://ais/snapshot${qs}`);
   return new Response(await resp.text(), {
     headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
