@@ -49,5 +49,13 @@
   "vectorize": [{ "binding": "VEC", "index_name": "meridian-events" }],
 
   // Workers AI: bge embeddings for Vectorize and grounded summaries later.
-  "ai": { "binding": "AI" }
+  "ai": { "binding": "AI" },
+
+  // Live global AIS collector: a SQLite-backed Durable Object (free tier) that
+  // holds the aisstream.io WebSocket open in bounded alarm windows and stores
+  // the latest vessel positions.
+  "durable_objects": {
+    "bindings": [{ "name": "AIS", "class_name": "AisCollector" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AisCollector"] }]
 }

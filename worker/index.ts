@@ -21,6 +21,9 @@ import { runIngest } from "./ingest";
 import { correlateSemantic } from "./semantic";
 import { ActionBody, applyAction } from "./actions";
 
+// The AIS collector Durable Object must be exported from the Worker entry.
+export { AisCollector } from "./ais";
+
 export interface Env {
   ASSETS: Fetcher;
   // Optional so the Worker still deploys and serves the SPA before D1/KV are
@@ -34,6 +37,9 @@ export interface Env {
   INGEST_TOKEN?: string;
   // FIRMS map key for the global active-fire feed. Unset disables that feed.
   NASA_MAP_KEY?: string;
+  // Live global AIS: the collector Durable Object and the aisstream.io key.
+  AIS: DurableObjectNamespace;
+  AISSTREAM_KEY?: string;
 }
 
 // Secrets passed to keyed adapters (FIRMS, etc.).
@@ -131,6 +137,17 @@ app.get("/api/incidents", async (c) => {
   if (!d) return c.json(NO_DB, 503);
   const limit = clampLimit(c.req.query("limit"), 100, 500);
   return c.json(await listIncidents(d, limit));
+});
+
+app.get("/api/ais", async (c) => {
+  const ns = c.env.AIS;
+  if (!ns) return c.json([], 200);
+  // Singleton collector instance; the first hit also starts its alarm windows.
+  const stub = ns.get(ns.idFromName("global"));
+  const resp = await stub.fetch("https://ais/snapshot");
+  return new Response(await resp.text(), {
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
 });
 
 app.get("/api/incidents/cross-domain", async (c) => {

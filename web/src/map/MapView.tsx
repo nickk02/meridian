@@ -11,6 +11,7 @@ import type { OntologyObject, OntologyLink } from "../../../shared/types";
 import { isValidCoord } from "../../../shared/coords";
 import { darkBasemap } from "./style";
 import { fetchSats, propagateSats, type Sat } from "./satellites";
+import { fetchAis } from "./ais";
 import { computeTerminator } from "./terminator";
 
 interface Props {
@@ -162,6 +163,7 @@ export function MapView(props: Props) {
   globeRef.current = globe;
   const [satsOn, setSatsOn] = useState(true);
   const satsRef = useRef<Sat[]>([]);
+  const [shipsOn, setShipsOn] = useState(true);
 
   // Init once.
   useEffect(() => {
@@ -341,6 +343,21 @@ export function MapView(props: Props) {
         },
       });
 
+      // Live global AIS vessels (overlay; refreshed by polling the collector DO).
+      map.addSource("ais", { type: "geojson", data: emptyFc() });
+      map.addLayer({
+        id: "ais",
+        type: "circle",
+        source: "ais",
+        paint: {
+          "circle-color": "#4ade80",
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 1.4, 6, 3] as ExpressionSpecification,
+          "circle-opacity": 0.8,
+          "circle-stroke-width": 0.4,
+          "circle-stroke-color": "#05140b",
+        },
+      });
+
       // Arrival pulses: an expanding, fading ring on each newly-arrived event,
       // driven by a per-feature progress value t (0..1) updated every frame.
       map.addSource("pulses", { type: "geojson", data: emptyFc() });
@@ -443,6 +460,30 @@ export function MapView(props: Props) {
     const id = window.setInterval(tick, 2000);
     return () => window.clearInterval(id);
   }, [satsOn]);
+
+  // Poll the live AIS snapshot and toggle the vessel layer with shipsOn.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const vis = shipsOn ? "visible" : "none";
+    const apply = () => {
+      if (map.getLayer("ais")) map.setLayoutProperty("ais", "visibility", vis);
+    };
+    if (readyRef.current) apply();
+    else map.once("load", apply);
+    if (!shipsOn) return;
+    let alive = true;
+    const load = () =>
+      fetchAis().then((fc) => {
+        if (alive && readyRef.current) (map.getSource("ais") as GeoJSONSource | undefined)?.setData(fc);
+      });
+    load();
+    const id = window.setInterval(load, 60_000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [shipsOn]);
 
   // Drift the day-night terminator (recompute once a minute).
   useEffect(() => {
@@ -557,6 +598,13 @@ export function MapView(props: Props) {
           aria-pressed={satsOn}
         >
           SATS
+        </button>
+        <button
+          className={`mer-proj-btn ${shipsOn ? "on" : ""}`}
+          onClick={() => setShipsOn((v) => !v)}
+          aria-pressed={shipsOn}
+        >
+          SHIPS
         </button>
       </div>
     </div>
