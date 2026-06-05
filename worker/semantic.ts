@@ -7,6 +7,14 @@
 //
 // Budget: this is NOT in the cron path. It runs only from the guarded manual
 // route, so Vectorize/AI usage is bounded to explicit triggers.
+//
+// Finding (2026-06-05): the AI+Vectorize integration is proven working end to
+// end, but on the CURRENT feeds it surfaces no links. The feeds do not cover the
+// same events under different names (GDACS West Pacific cyclones have no NHC
+// counterpart), and where a feed pair does describe one event (a GDACS quake and
+// its USGS quake), they sit at ~0km/0h and same-type proximity clustering already
+// links them. Semantic correlation will earn its keep once feeds with
+// overlapping-but-differently-phrased coverage are added (e.g. a news/NLP feed).
 import { haversineKm } from "./links";
 
 const EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"; // 768-dim, matches the index
@@ -31,7 +39,6 @@ export interface SemanticResult {
   embedded: number;
   semanticLinks: number;
   examples: { a: string; b: string; sim: number; km: number; hours: number }[];
-  diag?: unknown[];
 }
 
 export async function correlateSemantic(
@@ -74,26 +81,10 @@ export async function correlateSemantic(
   const byId = new Map(cands.map((c) => [c.id, c]));
   const seen = new Set<string>();
   const links: { a: string; b: string; sim: number; km: number; hours: number }[] = [];
-  const diag: unknown[] = [];
   for (let i = 0; i < cands.length; i++) {
     const c = cands[i];
     if (c.source !== "gdacs") continue; // query only the summary feed
     const res = await vec.query(vectors[i], { topK: 30, returnMetadata: true });
-    // Best match from a DIFFERENT feed (what semantic corroboration actually wants).
-    const xfeed = (res.matches ?? []).find(
-      (m) => m.id !== c.id && (m.metadata as { source?: string })?.source !== c.source,
-    );
-    if (xfeed && diag.length < 14) {
-      const tm = (xfeed.metadata ?? {}) as { source?: string; lat?: number; lon?: number; ts?: number };
-      diag.push({
-        g: c.name,
-        m: byId.get(xfeed.id)?.name ?? xfeed.id,
-        src: tm.source,
-        sim: Math.round(xfeed.score * 1000) / 1000,
-        km: tm.lat != null && tm.lon != null ? Math.round(haversineKm(c.lat, c.lon, tm.lat, tm.lon)) : -1,
-        hr: tm.ts != null ? Math.round(Math.abs(c.ts - tm.ts) / 3600_000) : -1,
-      });
-    }
     for (const m of res.matches ?? []) {
       if (m.id === c.id || m.score < SIM_MIN) continue;
       const meta = (m.metadata ?? {}) as { source?: string; lat?: number; lon?: number; ts?: number };
@@ -131,5 +122,5 @@ export async function correlateSemantic(
     for (let i = 0; i < batch.length; i += 50) await db.batch(batch.slice(i, i + 50));
   }
 
-  return { embedded: cands.length, semanticLinks: links.length, examples: links.slice(0, 8), diag };
+  return { embedded: cands.length, semanticLinks: links.length, examples: links.slice(0, 8) };
 }
