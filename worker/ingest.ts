@@ -4,6 +4,7 @@
 import type { IngestObject } from "./adapters/types";
 import { usgsAdapter } from "./adapters/usgs";
 import { eonetAdapter } from "./adapters/eonet";
+import { deriveLinks } from "./links";
 
 const ADAPTERS = [usgsAdapter, eonetAdapter];
 
@@ -12,6 +13,7 @@ export interface IngestResult {
   sources: { source: string; count: number }[];
   errors: { source: string; error: string }[];
   upserted: number;
+  links: number;
 }
 
 const UPSERT = `INSERT INTO objects
@@ -70,5 +72,6 @@ export async function runIngest(
   }
 
   await upsertObjects(db, collected, ran);
-  return { ran, sources, errors, upserted: collected.length };
+  const links = await deriveLinks(db);
+  return { ran, sources, errors, upserted: collected.length, links };
 }
