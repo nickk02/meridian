@@ -102,6 +102,31 @@ function rasterize(svg: string, px: number): Promise<ImageData> {
   });
 }
 
+// The satellite glyph as a 64px PNG data URL, for the deck.gl IconLayer that
+// draws sats at orbital altitude. Used as a mask icon (alpha = glyph), tinted at
+// runtime, so it reads as a satellite rather than a bare dot.
+export function loadSatelliteImage(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const px = 64;
+    const img = new Image(px, px);
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = px;
+      canvas.height = px;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("no 2d context"));
+        return;
+      }
+      ctx.clearRect(0, 0, px, px);
+      ctx.drawImage(img, 0, 0, px, px);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("svg rasterize failed"));
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgDoc(GLYPH.SATELLITE));
+  });
+}
+
 // Rasterize every glyph and register it as an SDF image. pixelRatio 2 means the
 // 64px raster represents a 32px icon at icon-size 1, which the layers scale down.
 export async function addMapIcons(map: maplibregl.Map): Promise<void> {
