@@ -120,6 +120,7 @@ export function App() {
             severityMin={severityMin}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            newIds={onto.newIds}
           />
         ) : tab === "feed" ? (
           <FeedView

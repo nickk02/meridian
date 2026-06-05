@@ -49,6 +49,9 @@ export interface Ontology {
   loaded: boolean;
   status: ApiState;
   lastSync: number | null;
+  // Ids that appeared in the latest poll (empty on first load). Drives the
+  // real-time arrival animation on the map.
+  newIds: Set<string>;
   refresh: () => void;
 }
 
@@ -155,6 +158,9 @@ export function useOntology(pollMs = 60_000): Ontology {
   const [loaded, setLoaded] = useState(false);
   const [status, setStatus] = useState<ApiState>("idle");
   const [lastSync, setLastSync] = useState<number | null>(null);
+  const [newIds, setNewIds] = useState<Set<string>>(new Set());
+  const prevIds = useRef<Set<string>>(new Set());
+  const firstLoad = useRef(true);
   const alive = useRef(true);
 
   const refresh = useCallback(async () => {
@@ -165,6 +171,17 @@ export function useOntology(pollMs = 60_000): Ontology {
         api.links(),
       ]);
       if (!alive.current) return;
+      // Diff against the previous poll to find arrivals (skip the first load so
+      // the whole world does not pulse at once).
+      const ids = new Set(o.map((x) => x.id));
+      if (firstLoad.current) {
+        firstLoad.current = false;
+      } else {
+        const fresh = new Set<string>();
+        for (const id of ids) if (!prevIds.current.has(id)) fresh.add(id);
+        setNewIds(fresh);
+      }
+      prevIds.current = ids;
       setTypes(t);
       setObjects(o);
       setLinks(l);
@@ -186,5 +203,5 @@ export function useOntology(pollMs = 60_000): Ontology {
     };
   }, [refresh, pollMs]);
 
-  return { types, objects, links, loaded, status, lastSync, refresh };
+  return { types, objects, links, loaded, status, lastSync, newIds, refresh };
 }
