@@ -14,6 +14,7 @@ import { cneosAdapter } from "./adapters/cneos";
 import { adsbAdapter } from "./adapters/adsb";
 import { digitrafficAdapter } from "./adapters/digitraffic";
 import { launchAdapter } from "./adapters/launch";
+import { firmsAdapter } from "./adapters/firms";
 import { deriveLinks } from "./links";
 import { resolveEntities } from "./entities";
 import { countryAt } from "./geo/reverse";
@@ -30,7 +31,12 @@ const ADAPTERS = [
   adsbAdapter,
   digitrafficAdapter,
   launchAdapter,
+  firmsAdapter,
 ];
+
+// Keyed feeds that only run on the gated (hourly) cycle, to bound their write
+// cost. FIRMS in particular is high-volume, so it skips the 15-min cron.
+const GATED_SOURCES = new Set(["firms"]);
 
 // Every source maps to exactly one domain (Stage A). Objects inherit their
 // adapter's domain, so a scope is just a domain filter.
@@ -45,13 +51,14 @@ const SOURCE_DOMAIN: Record<string, Domain> = {
   airplanes: "aviation",
   digitraffic: "maritime",
   launchlibrary: "space",
+  firms: "environmental",
 };
 
 // Static per-source reliability for the confidence score (Stage D).
 const RELIABILITY: Record<string, number> = {
   usgs: 0.98, nws: 0.97, nhc: 0.97, nifc: 0.95, eonet: 0.95,
   gdacs: 0.95, cneos: 0.95, launchlibrary: 0.9,
-  airplanes: 0.85, digitraffic: 0.85,
+  airplanes: 0.85, digitraffic: 0.85, firms: 0.8,
 };
 
 // Fallback source endpoint when a feed item has no per-event URL.
@@ -66,6 +73,7 @@ const SOURCE_URL: Record<string, string> = {
   airplanes: "https://airplanes.live/",
   digitraffic: "https://www.digitraffic.fi/en/marine-traffic/",
   launchlibrary: "https://thespacedevs.com/llapi",
+  firms: "https://firms.modaps.eosdis.nasa.gov/",
 };
 
 // confidence = reliability x recency. Recency decays linearly over a week to a
@@ -189,18 +197,27 @@ export async function runIngest(
   db: D1Database,
   cache: KVNamespace | undefined,
   raw: R2Bucket | undefined,
-  opts: { forceLinks?: boolean } = {},
+  opts: { forceLinks?: boolean; keys?: Record<string, string | undefined> } = {},
 ): Promise<IngestResult> {
   const ran = Date.now();
   const collected: IngestObject[] = [];
   const sources: IngestResult["sources"] = [];
   const errors: IngestResult["errors"] = [];
 
+  // The "heavy" cycle (forced, or the ~hourly link-rebuild interval) also drives
+  // the gated high-volume feeds (FIRMS). On the 15-min cron between heavy cycles
+  // those feeds are skipped to keep writes inside the free-tier budget.
+  const lastLink = await db
+    .prepare("SELECT MAX(created_ts) AS m FROM links WHERE kind != 'CORRELATED_WITH'")
+    .first<{ m: number | null }>();
+  const heavyCycle = Boolean(opts.forceLinks) || !lastLink?.m || ran - lastLink.m >= LINK_REBUILD_MS;
+
   for (const adapter of ADAPTERS) {
+    if (GATED_SOURCES.has(adapter.source) && !heavyCycle) continue;
     try {
       // Fetch upstream, archive the raw blob to R2 (timestamped + latest), then
       // normalize from the archived blob so refinement is decoupled from fetch.
-      const upstream = await adapter.fetchRaw(cache);
+      const upstream = await adapter.fetchRaw(cache, opts.keys);
       let payload: unknown = upstream;
       if (raw) {
         const body = JSON.stringify(upstream);
@@ -273,10 +290,7 @@ export async function runIngest(
   let incidents = 0;
   let correlatedLinks = 0;
   let crossIncidents = 0;
-  const last = await db
-    .prepare("SELECT MAX(created_ts) AS m FROM links WHERE kind != 'CORRELATED_WITH'")
-    .first<{ m: number | null }>();
-  if (opts.forceLinks || !last?.m || ran - last.m >= LINK_REBUILD_MS) {
+  if (heavyCycle) {
     links = await deriveLinks(db);
     const corr = await correlate(db, ran);
     incidents = corr.incidents;

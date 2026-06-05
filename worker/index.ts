@@ -31,6 +31,13 @@ export interface Env {
   AI?: Ai;
   // Shared secret guarding manual ingestion. Unset disables the manual route.
   INGEST_TOKEN?: string;
+  // FIRMS map key for the global active-fire feed. Unset disables that feed.
+  NASA_MAP_KEY?: string;
+}
+
+// Secrets passed to keyed adapters (FIRMS, etc.).
+function adapterKeys(env: Env): Record<string, string | undefined> {
+  return { NASA_MAP_KEY: env.NASA_MAP_KEY };
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -197,7 +204,7 @@ app.post("/api/ingest/run", async (c) => {
   if (!d) return c.json(NO_DB, 503);
   // Defaults to forcing a link rebuild; pass ?force=0 to exercise the cron gate.
   const forceLinks = c.req.query("force") !== "0";
-  const result = await runIngest(d, c.env.CACHE, c.env.RAW, { forceLinks });
+  const result = await runIngest(d, c.env.CACHE, c.env.RAW, { forceLinks, keys: adapterKeys(c.env) });
   return c.json(result);
 });
 
@@ -231,6 +238,8 @@ export default {
     ctx: ExecutionContext,
   ): Promise<void> {
     if (!env.DB) return;
-    ctx.waitUntil(runIngest(env.DB, env.CACHE, env.RAW).then(() => undefined));
+    ctx.waitUntil(
+      runIngest(env.DB, env.CACHE, env.RAW, { keys: adapterKeys(env) }).then(() => undefined),
+    );
   },
 };

@@ -25,6 +25,11 @@ export interface IngestObject {
 // R2 between the two, so normalization runs against the archived blob.
 export interface Adapter {
   source: string;
-  fetchRaw(cache: KVNamespace | undefined): Promise<unknown>;
+  // keys carries API secrets (e.g. NASA_MAP_KEY) for the few keyed feeds;
+  // keyless adapters ignore the second argument.
+  fetchRaw(
+    cache: KVNamespace | undefined,
+    keys?: Record<string, string | undefined>,
+  ): Promise<unknown>;
   normalize(raw: unknown): IngestObject[];
 }
