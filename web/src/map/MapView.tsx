@@ -115,11 +115,11 @@ const ICON_SIZE: ExpressionSpecification = [
   ["linear"],
   ["zoom"],
   4,
-  ["interpolate", ["linear"], ["get", "severity"], 1, 0.42, 4, 0.55],
+  ["interpolate", ["linear"], ["get", "severity"], 1, 0.48, 4, 0.6],
   9,
-  ["interpolate", ["linear"], ["get", "severity"], 1, 0.62, 4, 0.82],
+  ["interpolate", ["linear"], ["get", "severity"], 1, 0.72, 4, 0.92],
   14,
-  ["interpolate", ["linear"], ["get", "severity"], 1, 0.78, 4, 1.0],
+  ["interpolate", ["linear"], ["get", "severity"], 1, 0.9, 4, 1.15],
 ];
 
 function objectsGeo(objs: OntologyObject[]): FeatureCollection {
@@ -403,7 +403,9 @@ export function MapView(props: Props) {
         source: "sats",
         layout: {
           "icon-image": "ic-SATELLITE",
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.32, 4, 0.5, 8, 0.7] as ExpressionSpecification,
+          // Pinprick-sized at world view so hundreds of sats read as points, not
+          // a glyph wall; the satellite shape resolves as you zoom in.
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.16, 4, 0.42, 8, 0.7] as ExpressionSpecification,
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
         },
@@ -411,7 +413,7 @@ export function MapView(props: Props) {
           "icon-color": "#eaf6ff",
           "icon-halo-color": "#0a1622",
           "icon-halo-width": 1.1,
-          "icon-opacity": 0.95,
+          "icon-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.7, 4, 0.95] as ExpressionSpecification,
         },
       });
 
@@ -460,7 +462,9 @@ export function MapView(props: Props) {
         source: "aircraft",
         layout: {
           "icon-image": "ic-AIRCRAFT",
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.34, 6, 0.58] as ExpressionSpecification,
+          // Small at world view so dense traffic does not become a glyph wall;
+          // the plane (rotated to its track) resolves as you zoom in.
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.2, 4, 0.4, 7, 0.6] as ExpressionSpecification,
           "icon-rotate": ["coalesce", ["get", "heading"], 0] as unknown as ExpressionSpecification,
           "icon-rotation-alignment": "map",
           "icon-allow-overlap": true,
@@ -470,7 +474,7 @@ export function MapView(props: Props) {
           "icon-color": "#a8c6ff",
           "icon-halo-color": "#070d1a",
           "icon-halo-width": 1.1,
-          "icon-opacity": 0.95,
+          "icon-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.72, 4, 0.95] as ExpressionSpecification,
         },
       });
 
