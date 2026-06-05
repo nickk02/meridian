@@ -465,23 +465,28 @@ export function MapView(props: Props) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const vis = shipsOn ? "visible" : "none";
-    const apply = () => {
-      if (map.getLayer("ais")) map.setLayoutProperty("ais", "visibility", vis);
-    };
-    if (readyRef.current) apply();
-    else map.once("load", apply);
-    if (!shipsOn) return;
     let alive = true;
-    const load = () =>
-      fetchAis().then((fc) => {
-        if (alive && readyRef.current) (map.getSource("ais") as GeoJSONSource | undefined)?.setData(fc);
-      });
-    load();
-    const id = window.setInterval(load, 60_000);
+    let id: number | undefined;
+    const start = () => {
+      if (!alive) return;
+      if (map.getLayer("ais")) {
+        map.setLayoutProperty("ais", "visibility", shipsOn ? "visible" : "none");
+      }
+      if (!shipsOn) return;
+      const load = () =>
+        fetchAis().then((fc) => {
+          // The source exists once start() runs (after map load), so no ready
+          // gate is needed here; that gate was dropping the first snapshot.
+          if (alive) (map.getSource("ais") as GeoJSONSource | undefined)?.setData(fc);
+        });
+      load();
+      id = window.setInterval(load, 60_000);
+    };
+    if (readyRef.current) start();
+    else map.once("load", start);
     return () => {
       alive = false;
-      window.clearInterval(id);
+      if (id != null) window.clearInterval(id);
     };
   }, [shipsOn]);
 
