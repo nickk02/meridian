@@ -25,12 +25,26 @@ export class AisCollector extends DurableObject<Env> {
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS vessels (mmsi TEXT PRIMARY KEY, name TEXT, lat REAL, lon REAL, ts INTEGER)",
     );
+    this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)");
+  }
+
+  private setMeta(obj: Record<string, unknown>): void {
+    this.ctx.storage.sql.exec(
+      "INSERT OR REPLACE INTO meta (k, v) VALUES ('diag', ?)",
+      JSON.stringify({ at: Date.now(), ...obj }),
+    );
   }
 
   // Snapshot read. Also kickstarts the collection alarm on first contact.
-  async fetch(_req: Request): Promise<Response> {
+  // ?debug returns the last collection diagnostics instead of vessels.
+  async fetch(req: Request): Promise<Response> {
     if ((await this.ctx.storage.getAlarm()) == null) {
       await this.ctx.storage.setAlarm(Date.now() + 500);
+    }
+    if (new URL(req.url).searchParams.has("debug")) {
+      const m = this.ctx.storage.sql.exec("SELECT v FROM meta WHERE k = 'diag'").toArray();
+      const count = this.ctx.storage.sql.exec("SELECT COUNT(*) AS n FROM vessels").one().n;
+      return Response.json({ stored: count, diag: m[0]?.v ? JSON.parse(m[0].v as string) : null });
     }
     const rows = this.ctx.storage.sql
       .exec("SELECT mmsi, name, lat, lon, ts FROM vessels ORDER BY ts DESC LIMIT ?", MAX_VESSELS)
@@ -41,8 +55,8 @@ export class AisCollector extends DurableObject<Env> {
   async alarm(): Promise<void> {
     try {
       await this.collect();
-    } catch {
-      /* a failed window just means an empty refresh; try again next interval */
+    } catch (e) {
+      this.setMeta({ error: `alarm: ${String(e)}` });
     }
     this.ctx.storage.sql.exec("DELETE FROM vessels WHERE ts < ?", Date.now() - STALE_MS);
     await this.ctx.storage.setAlarm(Date.now() + COLLECT_INTERVAL_MS);
@@ -50,15 +64,24 @@ export class AisCollector extends DurableObject<Env> {
 
   private async collect(): Promise<void> {
     const key = this.env.AISSTREAM_KEY;
-    if (!key) return;
+    if (!key) {
+      this.setMeta({ error: "no AISSTREAM_KEY" });
+      return;
+    }
     const resp = await fetch("https://stream.aisstream.io/v0/stream", {
       headers: { Upgrade: "websocket" },
     });
     const ws = resp.webSocket;
-    if (!ws) return;
+    if (!ws) {
+      this.setMeta({ error: `no webSocket (status ${resp.status})` });
+      return;
+    }
     ws.accept();
 
     const positions = new Map<string, Pos>();
+    let total = 0;
+    let sample = "";
+    let closeInfo = "";
     await new Promise<void>((resolve) => {
       let settled = false;
       const finish = () => {
@@ -76,6 +99,8 @@ export class AisCollector extends DurableObject<Env> {
       ws.addEventListener("message", (ev) => {
         try {
           const data = typeof ev.data === "string" ? ev.data : "";
+          total++;
+          if (total <= 1) sample = data.slice(0, 240);
           const msg = JSON.parse(data) as {
             MessageType?: string;
             MetaData?: { MMSI?: number; ShipName?: string; latitude?: number; longitude?: number };
@@ -92,8 +117,14 @@ export class AisCollector extends DurableObject<Env> {
           /* skip malformed frame */
         }
       });
-      ws.addEventListener("close", finish);
-      ws.addEventListener("error", finish);
+      ws.addEventListener("close", (ev: CloseEvent) => {
+        closeInfo = `code=${ev.code} reason=${ev.reason}`;
+        finish();
+      });
+      ws.addEventListener("error", () => {
+        closeInfo = "ws error event";
+        finish();
+      });
       // aisstream requires a subscription message right after connecting.
       ws.send(
         JSON.stringify({
@@ -103,6 +134,8 @@ export class AisCollector extends DurableObject<Env> {
         }),
       );
     });
+
+    this.setMeta({ opened: true, total, kept: positions.size, sample, closeInfo });
 
     for (const [mmsi, p] of positions) {
       this.ctx.storage.sql.exec(
