@@ -6,6 +6,7 @@ import type { FeatureCollection, Feature } from "geojson";
 import type { OntologyObject, OntologyLink } from "../../../shared/types";
 import { isValidCoord } from "../../../shared/coords";
 import { darkBasemap } from "./style";
+import { addMapIcons, ICON_IMAGE } from "./icons";
 import { fetchSats, propagateSats, type Sat } from "./satellites";
 import { fetchAis } from "./ais";
 import { fetchAircraft } from "./aircraft";
@@ -84,6 +85,41 @@ const GLOW_RADIUS: ExpressionSpecification = [
   ["interpolate", ["linear"], ["get", "severity"], 1, 6, 4, 16],
   12,
   ["interpolate", ["linear"], ["get", "severity"], 1, 12, 4, 28],
+];
+
+// Glyphs take over from the dots as you zoom in. The dot fades out by ~z5.5 and
+// the type symbol fades in over z3.5..z5.5, so the world view stays a clean dot
+// field (no wall of overlapping glyphs) and icons resolve as you move closer.
+const DOT_FADE: ExpressionSpecification = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  3.5,
+  0.9,
+  5.5,
+  0,
+];
+const ICON_FADE: ExpressionSpecification = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  3.5,
+  0,
+  5.5,
+  1,
+];
+// Icon size grows with zoom and a little with severity, so the marker reads as a
+// type and severe events sit a touch larger.
+const ICON_SIZE: ExpressionSpecification = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  4,
+  ["interpolate", ["linear"], ["get", "severity"], 1, 0.42, 4, 0.55],
+  9,
+  ["interpolate", ["linear"], ["get", "severity"], 1, 0.62, 4, 0.82],
+  14,
+  ["interpolate", ["linear"], ["get", "severity"], 1, 0.78, 4, 1.0],
 ];
 
 function objectsGeo(objs: OntologyObject[]): FeatureCollection {
@@ -184,7 +220,7 @@ export function MapView(props: Props) {
     (window as unknown as { __merMap?: maplibregl.Map }).__merMap = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
 
-    map.on("load", () => {
+    map.on("load", async () => {
       if (startGlobe) {
         map.setProjection({ type: "globe" });
         applyGlobeSky(map);
@@ -196,6 +232,9 @@ export function MapView(props: Props) {
           easing: (t) => 1 - Math.pow(1 - t, 3),
         });
       }
+      // Register the type glyphs as SDF images before any symbol layer
+      // references them, so icon-image resolves on first paint.
+      await addMapIcons(map);
       // Day-night terminator: a dark fill over the night hemisphere, beneath all
       // data layers so events and satellites stay readable. Updated on a slow
       // interval (the terminator drifts ~15 deg/hour).
@@ -276,9 +315,33 @@ export function MapView(props: Props) {
         paint: {
           "circle-color": COLOR,
           "circle-radius": DOT_RADIUS,
+          "circle-opacity": DOT_FADE,
           "circle-stroke-width": ["case", ["==", ["get", "anchor"], 1], 1.5, 0.4],
           "circle-stroke-color": ["case", ["==", ["get", "anchor"], 1], "#0a0e14", "#05080d"],
-          "circle-stroke-opacity": 0.9,
+          "circle-stroke-opacity": DOT_FADE,
+        },
+      });
+
+      // Type glyphs: a symbol per object keyed off its type, tinted by severity
+      // (SDF icon-color) with a thin dark keyline for contrast. Glyphs resolve in
+      // as you zoom; below ~z3.5 the dot field carries the world view. Collision
+      // declutters at mid zoom and is allowed to overlap once you are close.
+      map.addLayer({
+        id: "objects-symbols",
+        type: "symbol",
+        source: "objects",
+        minzoom: 3,
+        layout: {
+          "icon-image": ICON_IMAGE,
+          "icon-size": ICON_SIZE,
+          "icon-allow-overlap": ["step", ["zoom"], false, 7, true] as unknown as boolean,
+          "icon-padding": 2,
+        },
+        paint: {
+          "icon-color": COLOR,
+          "icon-halo-color": "#05080d",
+          "icon-halo-width": 1.3,
+          "icon-opacity": ICON_FADE,
         },
       });
 
@@ -336,16 +399,26 @@ export function MapView(props: Props) {
       });
       map.addLayer({
         id: "sats",
-        type: "circle",
+        type: "symbol",
         source: "sats",
+        layout: {
+          "icon-image": "ic-SATELLITE",
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.32, 4, 0.5, 8, 0.7] as ExpressionSpecification,
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
         paint: {
-          "circle-color": "#eaf6ff",
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 1.3, 6, 2.6] as ExpressionSpecification,
-          "circle-opacity": 0.95,
+          "icon-color": "#eaf6ff",
+          "icon-halo-color": "#0a1622",
+          "icon-halo-width": 1.1,
+          "icon-opacity": 0.95,
         },
       });
 
       // Live global AIS vessels (overlay; refreshed by polling the collector DO).
+      // There are thousands, so at low zoom they stay small dots (cheap, and the
+      // hit target for clicks); the ship glyph layer switches on once you zoom
+      // into a harbor, where only the in-view vessels are laid out.
       map.addSource("ais", { type: "geojson", data: emptyFc() });
       map.addLayer({
         id: "ais",
@@ -353,25 +426,51 @@ export function MapView(props: Props) {
         source: "ais",
         paint: {
           "circle-color": "#4ade80",
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 1.4, 6, 3] as ExpressionSpecification,
-          "circle-opacity": 0.8,
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 1.4, 6, 3, 9, 1.5] as ExpressionSpecification,
+          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 4.5, 0.8, 6, 0] as ExpressionSpecification,
           "circle-stroke-width": 0.4,
           "circle-stroke-color": "#05140b",
         },
       });
+      map.addLayer({
+        id: "ais-symbols",
+        type: "symbol",
+        source: "ais",
+        minzoom: 5,
+        layout: {
+          "icon-image": "ic-VESSEL",
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 5, 0.42, 9, 0.62] as ExpressionSpecification,
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+        paint: {
+          "icon-color": "#6ef0a0",
+          "icon-halo-color": "#04150b",
+          "icon-halo-width": 1.1,
+          "icon-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 6, 0.95] as ExpressionSpecification,
+        },
+      });
 
-      // Live aircraft overlay (ADS-B; polled, not in D1).
+      // Live aircraft overlay (ADS-B; polled, not in D1). A plane glyph rotated
+      // to its track, so the map shows where each aircraft is heading.
       map.addSource("aircraft", { type: "geojson", data: emptyFc() });
       map.addLayer({
         id: "aircraft",
-        type: "circle",
+        type: "symbol",
         source: "aircraft",
+        layout: {
+          "icon-image": "ic-AIRCRAFT",
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.34, 6, 0.58] as ExpressionSpecification,
+          "icon-rotate": ["coalesce", ["get", "heading"], 0] as unknown as ExpressionSpecification,
+          "icon-rotation-alignment": "map",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
         paint: {
-          "circle-color": "#8fb6ff",
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 1.6, 6, 3.4] as ExpressionSpecification,
-          "circle-opacity": 0.9,
-          "circle-stroke-width": 0.4,
-          "circle-stroke-color": "#070d1a",
+          "icon-color": "#a8c6ff",
+          "icon-halo-color": "#070d1a",
+          "icon-halo-width": 1.1,
+          "icon-opacity": 0.95,
         },
       });
 
@@ -417,7 +516,7 @@ export function MapView(props: Props) {
       ];
       map.on("click", (e) => {
         const box = boxAt(e.point.x, e.point.y);
-        const obj = map.queryRenderedFeatures(box, { layers: ["objects"] })[0];
+        const obj = map.queryRenderedFeatures(box, { layers: ["objects", "objects-symbols"] })[0];
         if (obj && typeof obj.properties?.["id"] === "string") {
           onSelectRef.current(obj.properties["id"]);
           return;
@@ -448,7 +547,7 @@ export function MapView(props: Props) {
       // Pointer cursor over any clickable feature.
       map.on("mousemove", (e) => {
         const over = map.queryRenderedFeatures(boxAt(e.point.x, e.point.y), {
-          layers: ["objects", "aircraft", "ais", "sats"],
+          layers: ["objects", "objects-symbols", "aircraft", "ais", "ais-symbols", "sats"],
         }).length > 0;
         map.getCanvas().style.cursor = over ? "pointer" : "";
       });
@@ -536,9 +635,9 @@ export function MapView(props: Props) {
     let id: number | undefined;
     const start = () => {
       if (!alive) return;
-      if (map.getLayer("ais")) {
-        map.setLayoutProperty("ais", "visibility", shipsOn ? "visible" : "none");
-      }
+      const shipVis = shipsOn ? "visible" : "none";
+      if (map.getLayer("ais")) map.setLayoutProperty("ais", "visibility", shipVis);
+      if (map.getLayer("ais-symbols")) map.setLayoutProperty("ais-symbols", "visibility", shipVis);
       if (!shipsOn) return;
       const load = () =>
         fetchAis().then((fc) => {
