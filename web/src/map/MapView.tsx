@@ -45,6 +45,32 @@ const COLOR: ExpressionSpecification = [
   ],
 ];
 
+// Point size scales with BOTH zoom and severity, so dots are pinpricks at world
+// view and grow to readable markers as you zoom in (the core "scales" fix).
+const DOT_RADIUS: ExpressionSpecification = [
+  "interpolate",
+  ["exponential", 1.5],
+  ["zoom"],
+  1,
+  ["interpolate", ["linear"], ["get", "severity"], 1, 1.5, 4, 3],
+  6,
+  ["interpolate", ["linear"], ["get", "severity"], 1, 3, 4, 7],
+  12,
+  ["interpolate", ["linear"], ["get", "severity"], 1, 6, 4, 14],
+];
+
+const GLOW_RADIUS: ExpressionSpecification = [
+  "interpolate",
+  ["exponential", 1.5],
+  ["zoom"],
+  1,
+  ["interpolate", ["linear"], ["get", "severity"], 1, 3, 4, 8],
+  6,
+  ["interpolate", ["linear"], ["get", "severity"], 1, 6, 4, 16],
+  12,
+  ["interpolate", ["linear"], ["get", "severity"], 1, 12, 4, 28],
+];
+
 function objectsGeo(objs: OntologyObject[]): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
@@ -133,6 +159,33 @@ export function MapView(props: Props) {
         },
       });
 
+      // Density heatmap at low zoom (dynamic events only), fading out by z6 so
+      // busy regions read as heat instead of an unreadable blob of dots.
+      map.addLayer({
+        id: "objects-heat",
+        type: "heatmap",
+        source: "objects",
+        maxzoom: 6,
+        filter: ["!", ["match", ["get", "type"], ["PORT", "CHOKEPOINT", "AIRPORT"], true, false]],
+        paint: {
+          "heatmap-weight": ["interpolate", ["linear"], ["get", "severity"], 1, 0.35, 4, 1] as ExpressionSpecification,
+          "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.6, 5, 1.4] as ExpressionSpecification,
+          "heatmap-color": [
+            "interpolate",
+            ["linear"],
+            ["heatmap-density"],
+            0, "rgba(0,0,0,0)",
+            0.2, "rgba(27,138,150,0.5)",
+            0.45, "#1b8a96",
+            0.65, "#f2a93b",
+            0.85, "#ff6b3d",
+            1, "#ff4d4d",
+          ] as ExpressionSpecification,
+          "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 8, 5, 22] as ExpressionSpecification,
+          "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.65, 3.5, 0.5, 6, 0] as ExpressionSpecification,
+        },
+      });
+
       map.addLayer({
         id: "objects-glow",
         type: "circle",
@@ -140,16 +193,8 @@ export function MapView(props: Props) {
         paint: {
           "circle-color": COLOR,
           "circle-blur": 1,
-          "circle-opacity": 0.35,
-          "circle-radius": [
-            "interpolate",
-            ["linear"],
-            ["get", "severity"],
-            1,
-            6,
-            4,
-            16,
-          ] as ExpressionSpecification,
+          "circle-opacity": 0.3,
+          "circle-radius": GLOW_RADIUS,
         },
       });
 
@@ -159,16 +204,8 @@ export function MapView(props: Props) {
         source: "objects",
         paint: {
           "circle-color": COLOR,
-          "circle-radius": [
-            "interpolate",
-            ["linear"],
-            ["get", "severity"],
-            1,
-            3,
-            4,
-            7,
-          ] as ExpressionSpecification,
-          "circle-stroke-width": ["case", ["==", ["get", "anchor"], 1], 1.5, 0.5],
+          "circle-radius": DOT_RADIUS,
+          "circle-stroke-width": ["case", ["==", ["get", "anchor"], 1], 1.5, 0.4],
           "circle-stroke-color": ["case", ["==", ["get", "anchor"], 1], "#0a0e14", "#05080d"],
           "circle-stroke-opacity": 0.9,
         },
