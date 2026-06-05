@@ -118,7 +118,9 @@ Pushing to `main` triggers Cloudflare Workers Builds: `npm ci && npm run build`,
 
 ## Data sources
 
-Meridian draws only on official, public, free, and legal feeds. Live layers today include seismic (USGS), aviation (ADS-B via airplanes.live), maritime AIS (Digitraffic), wildfire (NIFC), weather alerts (NWS), tropical cyclones (NHC), environmental events (NASA EONET), disasters (GDACS), and space (CNEOS fireballs, Launch Library), with more official sources being added in waves. See [SOURCES.md](SOURCES.md) for the full feed list and the provenance of each.
+Meridian draws only on official, public, free, and legal feeds. Live layers today include seismic (USGS), aviation (ADS-B via airplanes.live), maritime AIS (regional via Digitraffic, plus global live AIS via aisstream.io), global active fire (NASA FIRMS) and wildfire (NIFC), weather alerts (NWS), tropical cyclones (NHC), environmental events (NASA EONET), disasters (GDACS), space (CNEOS fireballs, Launch Library), and orbital (live satellites via CelesTrak), with more official sources being added in waves. See [SOURCES.md](SOURCES.md) for the full feed list and the provenance of each.
+
+Fast-moving live layers (global AIS vessels, satellites) are kept out of the durable ontology and rendered as overlays: a SQLite-backed Durable Object holds the aisstream.io WebSocket open in bounded windows and serves vessel snapshots, and satellite positions are propagated client-side from orbital elements. Both stay within the free tier.
 
 ## Roadmap
 
