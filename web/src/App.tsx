@@ -151,7 +151,7 @@ export function App() {
           )}
           <div>
             <div className="mer-brand">MERIDIAN</div>
-            <div className="mer-brand-sub">COMMON OPERATING PICTURE</div>
+            <div className="mer-brand-sub">Connecting the world's events in real time.</div>
           </div>
         </NavbarGroup>
         <NavbarGroup align={Alignment.RIGHT}>
