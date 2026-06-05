@@ -9,6 +9,7 @@ import { nwsAdapter } from "./adapters/nws";
 import { nhcAdapter } from "./adapters/nhc";
 import { nifcAdapter } from "./adapters/nifc";
 import { cneosAdapter } from "./adapters/cneos";
+import { adsbAdapter } from "./adapters/adsb";
 import { deriveLinks } from "./links";
 
 const ADAPTERS = [
@@ -19,7 +20,13 @@ const ADAPTERS = [
   nhcAdapter,
   nifcAdapter,
   cneosAdapter,
+  adsbAdapter,
 ];
+
+// Fast-moving sources whose stale positions are misleading: pruned aggressively
+// so a landed aircraft drops off the map within the hour.
+const FAST_SOURCES = ["airplanes"];
+const FAST_PRUNE_MS = 60 * 60 * 1000;
 
 export interface IngestResult {
   ran: number;
@@ -104,7 +111,14 @@ export async function runIngest(
     )
     .bind(ran - PRUNE_AGE_MS)
     .run();
-  const pruned = prune.meta.changes ?? 0;
+  const fastPrune = await db
+    .prepare(
+      `DELETE FROM objects WHERE source IN (${FAST_SOURCES.map(() => "?").join(",")})
+        AND last_seen < ?`,
+    )
+    .bind(...FAST_SOURCES, ran - FAST_PRUNE_MS)
+    .run();
+  const pruned = (prune.meta.changes ?? 0) + (fastPrune.meta.changes ?? 0);
 
   // Rebuild links only when due (or forced by a manual run).
   let links = -1;
