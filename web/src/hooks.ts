@@ -52,6 +52,31 @@ export interface Ontology {
   refresh: () => void;
 }
 
+import type { Incident } from "../../shared/types";
+
+// Incidents (correlation clusters), polled with the ontology cadence.
+export function useIncidents(pollMs = 60_000): Incident[] {
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/incidents?limit=200");
+        if (r.ok && alive) setIncidents((await r.json()) as Incident[]);
+      } catch {
+        /* keep prior */
+      }
+    };
+    load();
+    const id = window.setInterval(load, pollMs);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [pollMs]);
+  return incidents;
+}
+
 export interface ObjectDetail {
   object: OntologyObject;
   neighbors: { object: OntologyObject; link: OntologyLink }[];

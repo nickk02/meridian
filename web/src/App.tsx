@@ -12,22 +12,24 @@ import {
   DrawerSize,
 } from "@blueprintjs/core";
 import type { ObjectType } from "../../shared/types";
-import { useOntology, useUtcClock, useIsMobile } from "./hooks";
+import { useOntology, useUtcClock, useIsMobile, useIncidents } from "./hooks";
 import { MapView } from "./map/MapView";
 import { LayerTree } from "./components/LayerTree";
 import { Inspector } from "./components/Inspector";
 import { GraphView } from "./components/GraphView";
+import { FeedView } from "./components/FeedView";
 import { ActivityLog } from "./components/ActivityLog";
 import { BootOverlay } from "./components/BootOverlay";
 
 export function App() {
   const clock = useUtcClock();
   const onto = useOntology();
+  const incidents = useIncidents();
   const isMobile = useIsMobile();
   const [visible, setVisible] = useState<Set<string>>(new Set());
   const [severityMin, setSeverityMin] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<string>("map");
+  const [tab, setTab] = useState<string>("feed");
   const [activityVersion, setActivityVersion] = useState(0);
   const [layersOpen, setLayersOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -104,6 +106,7 @@ export function App() {
   const center = (
     <main className="mer-center">
       <Tabs id="mer-view" className="mer-tabs" selectedTabId={tab} onChange={(t) => setTab(String(t))}>
+        <Tab id="feed" title="FEED" />
         <Tab id="map" title="MAP" />
         <Tab id="graph" title="GRAPH" />
       </Tabs>
@@ -114,6 +117,13 @@ export function App() {
             links={onto.links}
             visibleTypes={visible}
             severityMin={severityMin}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        ) : tab === "feed" ? (
+          <FeedView
+            objects={onto.objects}
+            incidents={incidents}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />

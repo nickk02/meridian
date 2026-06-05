@@ -36,6 +36,7 @@ interface ObjectRow {
   domain: string | null;
   admin0: string | null;
   admin1: string | null;
+  incident_id: string | null;
   props: string | null;
   first_seen: number;
   last_seen: number;
@@ -57,6 +58,7 @@ function mapObject(row: ObjectRow): OntologyObject {
     domain: (row.domain ?? "other") as OntologyObject["domain"],
     admin0: row.admin0,
     admin1: row.admin1,
+    incident_id: row.incident_id ?? null,
     props: parseJson(row.props),
     first_seen: row.first_seen,
     last_seen: row.last_seen,

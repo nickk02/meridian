@@ -60,6 +60,7 @@ export interface OntologyObject {
   domain: Domain;
   admin0: string | null;
   admin1: string | null;
+  incident_id: string | null;
   props: Record<string, unknown> | null;
   first_seen: number;
   last_seen: number;
