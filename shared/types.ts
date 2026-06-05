@@ -25,6 +25,26 @@ export interface ObjectType {
   geom_kind: "point" | "area";
 }
 
+// Controlled domain vocabulary. Every object carries exactly one domain so a
+// scope is just a filter.
+export type Domain =
+  | "environmental"
+  | "financial"
+  | "political"
+  | "conflict"
+  | "transport"
+  | "maritime"
+  | "aviation"
+  | "seismic"
+  | "space"
+  | "health"
+  | "energy"
+  | "cyber"
+  | "sports"
+  | "civic"
+  | "disaster"
+  | "other";
+
 export interface OntologyObject {
   id: string;
   type: ObjectTypeId;
@@ -34,6 +54,9 @@ export interface OntologyObject {
   severity: number;
   ts: number;
   source: string | null;
+  domain: Domain;
+  admin0: string | null;
+  admin1: string | null;
   props: Record<string, unknown> | null;
   first_seen: number;
   last_seen: number;

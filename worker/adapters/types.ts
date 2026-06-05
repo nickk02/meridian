@@ -11,6 +11,9 @@ export interface IngestObject {
   severity: number;
   ts: number;
   source: string;
+  // ISO 3166-1 alpha-3, set by adapters whose feed carries it; otherwise
+  // backfilled from coordinates by the gazetteer (Stage C).
+  admin0?: string;
   props: Record<string, unknown>;
 }
 

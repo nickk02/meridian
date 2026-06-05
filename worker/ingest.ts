@@ -2,6 +2,7 @@
 // Link derivation (Phase D) is invoked at the end once links exist.
 
 import type { IngestObject } from "./adapters/types";
+import type { Domain } from "../shared/types";
 import { usgsAdapter } from "./adapters/usgs";
 import { eonetAdapter } from "./adapters/eonet";
 import { gdacsAdapter } from "./adapters/gdacs";
@@ -27,6 +28,21 @@ const ADAPTERS = [
   launchAdapter,
 ];
 
+// Every source maps to exactly one domain (Stage A). Objects inherit their
+// adapter's domain, so a scope is just a domain filter.
+const SOURCE_DOMAIN: Record<string, Domain> = {
+  usgs: "seismic",
+  eonet: "environmental",
+  gdacs: "disaster",
+  nws: "environmental",
+  nhc: "environmental",
+  nifc: "environmental",
+  cneos: "space",
+  airplanes: "aviation",
+  digitraffic: "maritime",
+  launchlibrary: "space",
+};
+
 // Fast-moving sources whose stale positions are misleading: pruned aggressively
 // so a landed aircraft or departed vessel drops off the map within the hour.
 const FAST_SOURCES = ["airplanes", "digitraffic"];
@@ -49,11 +65,12 @@ const LINK_REBUILD_MS = 55 * 60 * 1000;
 const PRUNE_AGE_MS = 12 * 60 * 60 * 1000;
 
 const UPSERT = `INSERT INTO objects
-  (id, type, name, lat, lon, severity, ts, source, props, first_seen, last_seen)
-  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)
+  (id, type, name, lat, lon, severity, ts, source, domain, admin0, props, first_seen, last_seen)
+  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)
   ON CONFLICT(id) DO UPDATE SET
     name = excluded.name, lat = excluded.lat, lon = excluded.lon,
     severity = excluded.severity, ts = excluded.ts, source = excluded.source,
+    domain = excluded.domain, admin0 = excluded.admin0,
     props = excluded.props, last_seen = excluded.last_seen`;
 
 async function upsertObjects(
@@ -76,6 +93,8 @@ async function upsertObjects(
           o.severity,
           o.ts,
           o.source,
+          SOURCE_DOMAIN[o.source] ?? "other",
+          o.admin0 ?? null,
           JSON.stringify(o.props),
           now,
         ),

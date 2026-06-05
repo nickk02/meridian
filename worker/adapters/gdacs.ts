@@ -61,6 +61,7 @@ export function normalizeGdacs(feed: GdacsFeed): IngestObject[] {
       severity: SEVERITY[p.alertlevel] ?? 2,
       ts: parseUtc(p.datemodified) || parseUtc(p.fromdate),
       source: "gdacs",
+      admin0: p.iso3 && p.iso3.length === 3 ? p.iso3 : undefined,
       props: {
         alertlevel: p.alertlevel,
         country: p.country ?? p.iso3 ?? null,

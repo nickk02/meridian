@@ -27,6 +27,9 @@ interface ObjectRow {
   severity: number;
   ts: number;
   source: string | null;
+  domain: string | null;
+  admin0: string | null;
+  admin1: string | null;
   props: string | null;
   first_seen: number;
   last_seen: number;
@@ -42,6 +45,9 @@ function mapObject(row: ObjectRow): OntologyObject {
     severity: row.severity,
     ts: row.ts,
     source: row.source,
+    domain: (row.domain ?? "other") as OntologyObject["domain"],
+    admin0: row.admin0,
+    admin1: row.admin1,
     props: parseJson(row.props),
     first_seen: row.first_seen,
     last_seen: row.last_seen,
@@ -177,7 +183,8 @@ export async function getNeighbors(
       `SELECT l.id AS l_id, l.source_id, l.target_id, l.kind, l.meta,
               l.confidence, l.created_ts,
               o.id, o.type, o.name, o.lat, o.lon, o.severity, o.ts,
-              o.source, o.props, o.first_seen, o.last_seen
+              o.source, o.domain, o.admin0, o.admin1, o.props,
+              o.first_seen, o.last_seen
          FROM links l
          JOIN objects o
            ON o.id = CASE WHEN l.source_id = ?1 THEN l.target_id
