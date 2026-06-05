@@ -8,6 +8,23 @@ import { api } from "./api";
 
 export type ApiState = "idle" | "ok" | "down";
 
+// Tracks a max-width media query so the shell can switch to a drawer-based
+// mobile layout.
+export function useIsMobile(maxWidth = 820): boolean {
+  const query = `(max-width: ${maxWidth}px)`;
+  const [match, setMatch] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setMatch(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [query]);
+  return match;
+}
+
 export function useUtcClock(): string {
   const [now, setNow] = useState(() => formatUtc(new Date()));
   useEffect(() => {

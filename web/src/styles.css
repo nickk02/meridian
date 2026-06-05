@@ -37,6 +37,7 @@ body {
   display: grid;
   grid-template-rows: auto 1fr auto;
   height: 100vh;
+  height: 100dvh;
 }
 
 .mer-body {
@@ -435,4 +436,74 @@ body {
 }
 .mer-activity-obj {
   color: #aeb8c6;
+}
+
+/* ----- Mobile: drawers instead of fixed rails ----------------------------- */
+
+.mer-nav-btn.bp5-button {
+  margin: 0 4px;
+  color: var(--mer-cyan);
+}
+
+.mer-body-mobile {
+  display: flex;
+  min-height: 0;
+}
+.mer-body-mobile .mer-center {
+  flex: 1;
+  width: 100%;
+}
+
+/* Blueprint drawer, themed to the console. */
+.mer-drawer.bp5-drawer {
+  background: var(--mer-panel);
+  display: flex;
+  flex-direction: column;
+}
+.mer-drawer .bp5-drawer-header {
+  background: var(--mer-panel-raised);
+  border-bottom: 1px solid var(--mer-border);
+  box-shadow: none;
+}
+.mer-drawer .bp5-heading {
+  font-family: var(--mer-mono);
+  letter-spacing: 0.2em;
+  font-size: 12px;
+  color: var(--mer-text-dim);
+}
+.mer-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+@media (max-width: 820px) {
+  body {
+    /* Keep the grid backdrop but allow drawers to own scrolling. */
+    background-size: 32px 32px;
+  }
+  .mer-navbar.bp5-navbar {
+    padding: 0 6px;
+    height: 52px;
+  }
+  .mer-brand {
+    font-size: 13px;
+    letter-spacing: 0.3em;
+  }
+  .mer-brand-sub {
+    font-size: 8px;
+    letter-spacing: 0.16em;
+  }
+  /* Bigger touch targets for the layer rows and segmented control. */
+  .mer-tree .bp5-tree-node-content {
+    height: 36px;
+  }
+  .mer-neighbor,
+  .mer-activity-row {
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+  .maplibregl-ctrl-bottom-right {
+    margin-bottom: 6px;
+  }
 }
