@@ -78,15 +78,18 @@ export async function correlateSemantic(
   for (let i = 0; i < cands.length; i++) {
     const c = cands[i];
     if (c.source !== "gdacs") continue; // query only the summary feed
-    const res = await vec.query(vectors[i], { topK: 5, returnMetadata: true });
-    const top = (res.matches ?? []).find((m) => m.id !== c.id);
-    if (top && diag.length < 14) {
-      const tm = (top.metadata ?? {}) as { source?: string; lat?: number; lon?: number; ts?: number };
+    const res = await vec.query(vectors[i], { topK: 30, returnMetadata: true });
+    // Best match from a DIFFERENT feed (what semantic corroboration actually wants).
+    const xfeed = (res.matches ?? []).find(
+      (m) => m.id !== c.id && (m.metadata as { source?: string })?.source !== c.source,
+    );
+    if (xfeed && diag.length < 14) {
+      const tm = (xfeed.metadata ?? {}) as { source?: string; lat?: number; lon?: number; ts?: number };
       diag.push({
         g: c.name,
-        m: byId.get(top.id)?.name ?? top.id,
+        m: byId.get(xfeed.id)?.name ?? xfeed.id,
         src: tm.source,
-        sim: Math.round(top.score * 1000) / 1000,
+        sim: Math.round(xfeed.score * 1000) / 1000,
         km: tm.lat != null && tm.lon != null ? Math.round(haversineKm(c.lat, c.lon, tm.lat, tm.lon)) : -1,
         hr: tm.ts != null ? Math.round(Math.abs(c.ts - tm.ts) / 3600_000) : -1,
       });
