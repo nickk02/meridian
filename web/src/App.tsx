@@ -29,7 +29,7 @@ export function App() {
   const [visible, setVisible] = useState<Set<string>>(new Set());
   const [severityMin, setSeverityMin] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<string>("feed");
+  const [tab, setTab] = useState<string>("map");
   const [activityVersion, setActivityVersion] = useState(0);
   const [layersOpen, setLayersOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
