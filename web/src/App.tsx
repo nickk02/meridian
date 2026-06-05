@@ -18,6 +18,7 @@ import { LayerTree } from "./components/LayerTree";
 import { Inspector } from "./components/Inspector";
 import { GraphView } from "./components/GraphView";
 import { ActivityLog } from "./components/ActivityLog";
+import { BootOverlay } from "./components/BootOverlay";
 
 export function App() {
   const clock = useUtcClock();
@@ -31,6 +32,12 @@ export function App() {
   const [layersOpen, setLayersOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [booting, setBooting] = useState(true);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setBooting(false), 3100);
+    return () => window.clearTimeout(id);
+  }, []);
 
   useEffect(() => {
     if (onto.types.length && visible.size === 0) {
@@ -118,7 +125,9 @@ export function App() {
   );
 
   return (
-    <div className="mer-shell">
+    <>
+      {booting && <BootOverlay />}
+      <div className="mer-shell mer-revealing">
       <Navbar className="mer-navbar">
         <NavbarGroup align={Alignment.LEFT}>
           {isMobile && (
@@ -230,6 +239,7 @@ export function App() {
           </footer>
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }

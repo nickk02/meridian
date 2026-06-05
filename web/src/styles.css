@@ -1,17 +1,19 @@
 /* Meridian operator console. Layers a thin token set on top of Blueprint dark. */
 
 :root {
-  --mer-bg: #0a0e14;
-  --mer-panel: #11161f;
-  --mer-panel-raised: #161c27;
-  --mer-border: #232b38;
-  --mer-grid-line: #1a202b;
-  --mer-cyan: #2dd6e8;
-  --mer-cyan-dim: #1b8a96;
-  --mer-amber: #f2a93b;
-  --mer-text-dim: #7a8699;
-  --mer-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code",
-    Menlo, Consolas, monospace;
+  --mer-bg: #06070c;
+  --mer-panel: #0a0d15;
+  --mer-panel-raised: #0f131d;
+  --mer-border: #1a2130;
+  --mer-grid-line: #10141d;
+  --mer-cyan: #36d6e7;
+  --mer-cyan-dim: #1a7e8c;
+  --mer-amber: #f5b945;
+  --mer-gold: #d4af37;
+  --mer-text: #c4cdda;
+  --mer-text-dim: #6b7689;
+  --mer-display: "Chakra Petch", system-ui, sans-serif;
+  --mer-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 
 html,
@@ -27,8 +29,19 @@ body {
   background-image:
     linear-gradient(var(--mer-grid-line) 1px, transparent 1px),
     linear-gradient(90deg, var(--mer-grid-line) 1px, transparent 1px);
-  background-size: 40px 40px;
+  background-size: 44px 44px;
   overflow: hidden;
+}
+
+/* Re-skin Blueprint to the signals-desk type system. */
+body,
+.bp5-dark,
+.bp5-button,
+.bp5-tab,
+.bp5-tag,
+.bp5-input,
+.bp5-tree {
+  font-family: var(--mer-display);
 }
 
 /* ----- Shell layout ------------------------------------------------------- */
@@ -78,20 +91,32 @@ body {
 }
 
 .mer-brand {
-  font-family: var(--mer-mono);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mer-display);
   font-weight: 700;
-  letter-spacing: 0.42em;
-  font-size: 15px;
+  letter-spacing: 0.46em;
+  font-size: 16px;
   color: var(--mer-cyan);
-  text-shadow: 0 0 14px rgba(45, 214, 232, 0.35);
+  text-shadow: 0 0 18px rgba(54, 214, 231, 0.4);
+}
+/* leading signal block on the brand */
+.mer-brand::before {
+  content: "";
+  width: 4px;
+  height: 18px;
+  background: var(--mer-amber);
+  box-shadow: 0 0 10px var(--mer-amber);
 }
 
 .mer-brand-sub {
   font-family: var(--mer-mono);
-  letter-spacing: 0.22em;
-  font-size: 10px;
+  letter-spacing: 0.34em;
+  font-size: 9px;
   color: var(--mer-text-dim);
-  margin-top: 2px;
+  margin-top: 3px;
+  padding-left: 14px;
 }
 
 .mer-clock {
@@ -109,16 +134,31 @@ body {
 /* ----- Section headers ---------------------------------------------------- */
 
 .mer-section-head {
-  font-family: var(--mer-mono);
-  font-size: 10px;
-  letter-spacing: 0.24em;
+  font-family: var(--mer-display);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--mer-text-dim);
-  padding: 10px 12px 8px;
+  color: #9aa6b8;
+  padding: 11px 12px 9px 18px;
   border-bottom: 1px solid var(--mer-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent);
+}
+/* gold accent tick on every section header */
+.mer-section-head::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 11px;
+  background: var(--mer-amber);
+  box-shadow: 0 0 8px rgba(245, 185, 69, 0.5);
 }
 
 .mer-pad {
@@ -542,4 +582,99 @@ body {
   font-size: 12px;
   color: #c6d0de;
   border-left: 2px solid var(--mer-cyan-dim);
+}
+
+/* ----- Boot sequence + reveal (Signals Desk) ------------------------------ */
+
+.mer-boot {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: radial-gradient(ellipse at center, #0a1018 0%, #06070c 72%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  animation: mer-boot-out 0.6s ease 2.5s forwards;
+}
+.mer-boot::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  top: 0;
+  background: linear-gradient(90deg, transparent, rgba(54, 214, 231, 0.45), transparent);
+  animation: mer-scan 2.4s linear;
+}
+.mer-boot-mark {
+  font-family: var(--mer-display);
+  font-weight: 700;
+  font-size: 40px;
+  letter-spacing: 0.5em;
+  padding-left: 0.5em;
+  color: var(--mer-cyan);
+  text-shadow: 0 0 34px rgba(54, 214, 231, 0.55);
+  animation: mer-flicker 1.1s steps(2, end) 1;
+}
+.mer-boot-sub {
+  font-family: var(--mer-mono);
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  color: var(--mer-text-dim);
+}
+.mer-boot-lines {
+  font-family: var(--mer-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--mer-text-dim);
+  min-height: 100px;
+  width: 320px;
+}
+.mer-boot-line {
+  opacity: 0;
+  animation: mer-line-in 0.28s ease forwards;
+  margin: 3px 0;
+}
+.mer-boot-line .ok {
+  color: var(--mer-cyan);
+  float: right;
+}
+.mer-boot-line.ready {
+  color: var(--mer-amber);
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.3em;
+  margin-top: 10px;
+}
+@keyframes mer-line-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mer-boot-out {
+  to { opacity: 0; visibility: hidden; }
+}
+@keyframes mer-flicker {
+  0%, 100% { opacity: 1; }
+  40% { opacity: 0.25; }
+  55% { opacity: 1; }
+}
+@keyframes mer-scan {
+  from { top: 0; }
+  to { top: 100%; }
+}
+
+.mer-shell.mer-revealing > .mer-navbar { animation: mer-reveal 0.55s ease 2.5s backwards; }
+.mer-shell.mer-revealing > .mer-body,
+.mer-shell.mer-revealing > .mer-body-mobile { animation: mer-reveal 0.55s ease 2.68s backwards; }
+.mer-shell.mer-revealing > .mer-bottom { animation: mer-reveal 0.55s ease 2.84s backwards; }
+@keyframes mer-reveal {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mer-boot { display: none; }
+  .mer-shell.mer-revealing > * { animation: none !important; }
 }
