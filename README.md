@@ -15,7 +15,7 @@ Live instance: https://meridian.calm-butterfly-4753.workers.dev
 Most "intelligence dashboards" are a map with dots. The dots appear, the dots disappear, and nothing connects them. Meridian's premise is the opposite: the value is not the dots, it is the connections between them, surfaced honestly.
 
 * Grounded, not fabricated. Every event carries its source, fetch time, and a confidence score that decays with age. A 37-day-old event reads as low-confidence because it is. Nothing is invented to look authoritative.
-* Correlation, never fake causation. When events are linked, the link records its basis (spatio-temporal proximity today; shared entity and semantic similarity on the roadmap) and a confidence. Meridian shows that events co-occurred and why they may be related. It never claims one caused another. That judgment is left to the analyst.
+* Correlation, never fake causation. When events are linked, the link records its basis (same-type spatio-temporal clusters and co-causal cross-domain co-occurrence today; shared-entity and semantic similarity on the roadmap) and a confidence. Meridian shows that events co-occurred and why they may be related. It never claims one caused another. That judgment is left to the analyst.
 * Real entity resolution. Aircraft resolve by ICAO hex, vessels by MMSI, places by country and gazetteer. The same real-world thing seen through different feeds becomes one entity, so the links between events actually mean something.
 * Official and public sources only. No surveillance of named private individuals. No network scanning. No scanner audio. No facial recognition. No license-plate data. Meridian is a tool for understanding the world from public, official, aggregate information, not for watching people or probing infrastructure.
 * Edge-native and free. The whole system runs on Cloudflare Workers, D1, KV, R2, and Cron, within the free tier. Vectorize and Workers AI are provisioned for the semantic-correlation and grounded-summary work on the roadmap.
@@ -32,7 +32,7 @@ Live public feeds  ->  Cron ingest  ->  raw archive (R2)
                           D1 ontology  <->  entity resolution (hex / MMSI / ISO3 / gazetteer)
                                             |
                                             v
-                          correlation engine (spatio-temporal proximity)
+              correlation engine (spatio-temporal + co-causal cross-domain)
                                             |
                                             v
             Map (MapLibre, flat + globe)  +  scoped event feed  +  link graph  +  inspector
@@ -45,6 +45,8 @@ Feeds are pulled on a schedule and archived as raw JSON in R2, then normalized i
 Every event normalizes to a typed object: `{ id, domain, lat, lon, timestamp, severity, source, source_url, fetched_at, confidence, properties }`, tagged with one of 16 domains (seismic, environmental, disaster, maritime, aviation, space, financial, conflict, cyber, energy, health, transport, sports, civic, political, other) plus country and admin-1 region. Domains and regions are first-class, so "scopes" (for example, Europe today, or global maritime and energy) are simply saved filters over the same data.
 
 Spatio-temporally clustered events are folded into incidents: one anchor event plus the events that occur within a tight distance and time window of it, each member linked to the anchor with a stated basis. The cluster is anchor-radial by design, so an incident cannot sprawl across unrelated regions.
+
+Cross-domain incidents go a step further: events of different types that co-occur AND share a plausible mechanism (a volcano and its earthquake swarm, a storm and the floods it drives). Membership is gated to an explicit co-causal whitelist, so naive proximity (a wildfire that merely happens to be near a quake) never forms one. Each pair carries a time window matched to how long the phenomenon stays active.
 
 ## Provenance and confidence
 
@@ -63,8 +65,9 @@ Cloudflare Worker (Hono)
   /api/objects        read ontology from D1
   /api/links          read derived links from D1
   /api/object/:id     object detail + neighbors + provenance + entities
-  /api/incidents      correlated incident clusters
-  /api/incident/:id   incident detail + members
+  /api/incidents              correlated incident clusters
+  /api/incidents/cross-domain co-causal cross-type incidents
+  /api/incident/:id           incident detail + members
   /api/entity/:id     resolved entity + its events
   /api/action         write audited action + state
   /api/ingest/run     guarded manual ingest (token-protected)
@@ -121,7 +124,7 @@ Meridian draws only on official, public, free, and legal feeds. Live layers toda
 
 Not yet live, in build order:
 
-* Shared-entity and semantic correlation (Vectorize embeddings + Workers AI), beyond the spatio-temporal links shipping today.
+* Shared-entity and semantic correlation (Vectorize embeddings + Workers AI), beyond the spatio-temporal and cross-domain links shipping today.
 * Grounded event summaries via Workers AI, cited to sources, never invented.
 * Live-updating mode: new events animate onto the map as they arrive (a Durable Object WebSocket ticker, once sub-minute latency justifies leaving pure free-tier).
 * Additional official feeds across the financial, energy, health, and civic domains.
