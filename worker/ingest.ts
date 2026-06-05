@@ -15,6 +15,7 @@ import { digitrafficAdapter } from "./adapters/digitraffic";
 import { launchAdapter } from "./adapters/launch";
 import { deriveLinks } from "./links";
 import { resolveEntities } from "./entities";
+import { countryAt } from "./geo/reverse";
 
 const ADAPTERS = [
   usgsAdapter,
@@ -222,6 +223,15 @@ export async function runIngest(
         }
       }
       errors.push({ source: adapter.source, error: String(e) });
+    }
+  }
+
+  // Backfill admin0 from coordinates for land events the feed did not tag, so
+  // every land event resolves to its country entity.
+  for (const o of collected) {
+    if (!o.admin0) {
+      const iso3 = countryAt(o.lat, o.lon);
+      if (iso3) o.admin0 = iso3;
     }
   }
 
