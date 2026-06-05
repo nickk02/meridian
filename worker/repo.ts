@@ -7,6 +7,8 @@ import type {
   OntologyLink,
   ActionLogEntry,
   Annotation,
+  Entity,
+  EntityRef,
 } from "../shared/types";
 
 function parseJson(value: unknown): Record<string, unknown> | null {
@@ -157,6 +159,63 @@ export async function getAnnotations(
     .bind(id)
     .all<Annotation>();
   return results;
+}
+
+// Entities this event resolves to (Stage C).
+export async function getObjectEntities(
+  db: D1Database,
+  eventId: string,
+): Promise<EntityRef[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT e.id, e.type, e.canonical_name, e.wikidata_qid, e.admin0,
+              e.geonames_id, e.lat, e.lon, e.first_seen, e.last_seen,
+              el.role, el.source, el.confidence
+         FROM entity_links el
+         JOIN entities e ON e.id = el.entity_id
+        WHERE el.event_id = ?`,
+    )
+    .bind(eventId)
+    .all<Entity & { role: string; source: string; confidence: number }>();
+  return results.map((r) => ({
+    entity: {
+      id: r.id,
+      type: r.type,
+      canonical_name: r.canonical_name,
+      wikidata_qid: r.wikidata_qid,
+      admin0: r.admin0,
+      geonames_id: r.geonames_id,
+      lat: r.lat,
+      lon: r.lon,
+      first_seen: r.first_seen,
+      last_seen: r.last_seen,
+    },
+    role: r.role,
+    source: r.source,
+    confidence: r.confidence,
+  }));
+}
+
+export async function getEntity(
+  db: D1Database,
+  id: string,
+): Promise<Entity | null> {
+  return db.prepare("SELECT * FROM entities WHERE id = ?").bind(id).first<Entity>();
+}
+
+export async function getEntityEvents(
+  db: D1Database,
+  id: string,
+  limit: number,
+): Promise<OntologyObject[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT o.* FROM entity_links el JOIN objects o ON o.id = el.event_id
+        WHERE el.entity_id = ? ORDER BY o.ts DESC LIMIT ?`,
+    )
+    .bind(id, limit)
+    .all<ObjectRow>();
+  return results.map(mapObject);
 }
 
 export async function listActivity(

@@ -14,6 +14,7 @@ import { adsbAdapter } from "./adapters/adsb";
 import { digitrafficAdapter } from "./adapters/digitraffic";
 import { launchAdapter } from "./adapters/launch";
 import { deriveLinks } from "./links";
+import { resolveEntities } from "./entities";
 
 const ADAPTERS = [
   usgsAdapter,
@@ -55,6 +56,8 @@ export interface IngestResult {
   upserted: number;
   pruned: number;
   links: number; // -1 when the link rebuild was skipped this cycle
+  entities: number;
+  entityLinks: number;
 }
 
 // Object ingest runs every cron (15 min) for fresh dots, but link rebuild is
@@ -161,6 +164,7 @@ export async function runIngest(
   }
 
   await upsertObjects(db, collected, ran);
+  const ents = await resolveEntities(db, collected, ran);
 
   // Drop dynamic objects not refreshed recently; anchors are permanent.
   const prune = await db
@@ -189,5 +193,14 @@ export async function runIngest(
     links = await deriveLinks(db);
   }
 
-  return { ran, sources, errors, upserted: collected.length, pruned, links };
+  return {
+    ran,
+    sources,
+    errors,
+    upserted: collected.length,
+    pruned,
+    links,
+    entities: ents.entities,
+    entityLinks: ents.links,
+  };
 }

@@ -9,6 +9,9 @@ import {
   getState,
   getAnnotations,
   listActivity,
+  getObjectEntities,
+  getEntity,
+  getEntityEvents,
 } from "./repo";
 import { runIngest } from "./ingest";
 import { ActionBody, applyAction } from "./actions";
@@ -71,12 +74,23 @@ app.get("/api/object/:id", async (c) => {
   const id = c.req.param("id");
   const object = await getObject(d, id);
   if (!object) return c.json({ error: "not found" }, 404);
-  const [neighbors, state, annotations] = await Promise.all([
+  const [neighbors, state, annotations, entities] = await Promise.all([
     getNeighbors(d, id),
     getState(d, id),
     getAnnotations(d, id),
+    getObjectEntities(d, id),
   ]);
-  return c.json({ object, neighbors, state, annotations });
+  return c.json({ object, neighbors, state, annotations, entities });
+});
+
+app.get("/api/entity/:id", async (c) => {
+  const d = db(c);
+  if (!d) return c.json(NO_DB, 503);
+  const id = c.req.param("id");
+  const entity = await getEntity(d, id);
+  if (!entity) return c.json({ error: "not found" }, 404);
+  const events = await getEntityEvents(d, id, 200);
+  return c.json({ entity, events });
 });
 
 app.get("/api/activity", async (c) => {

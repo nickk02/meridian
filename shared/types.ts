@@ -93,6 +93,26 @@ export interface Annotation {
   ts: number;
 }
 
+export interface Entity {
+  id: string;
+  type: string;
+  canonical_name: string;
+  wikidata_qid: string | null;
+  admin0: string | null;
+  geonames_id: number | null;
+  lat: number | null;
+  lon: number | null;
+  first_seen: number;
+  last_seen: number;
+}
+
+export interface EntityRef {
+  entity: Entity;
+  role: string;
+  source: string;
+  confidence: number;
+}
+
 export interface HealthResponse {
   ok: boolean;
 }
