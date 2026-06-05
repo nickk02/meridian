@@ -142,9 +142,20 @@ app.get("/api/incidents", async (c) => {
 app.get("/api/ais", async (c) => {
   const ns = c.env.AIS;
   if (!ns) return c.json([], 200);
-  // Singleton collector instance; the first hit also starts its alarm windows.
+  // The plain snapshot is public (the map needs it). The ?run and ?debug
+  // controls force/inspect collection windows, so they are token-gated like the
+  // other manual triggers, otherwise anyone could spam collection windows and
+  // burn the free-tier DO compute and aisstream quota.
+  const wantsRun = c.req.query("run") != null;
+  const wantsDebug = c.req.query("debug") != null;
+  if (wantsRun || wantsDebug) {
+    const token = c.env.INGEST_TOKEN;
+    if (!token || c.req.header("authorization") !== `Bearer ${token}`) {
+      return c.json({ error: "unauthorized" }, 401);
+    }
+  }
   const stub = ns.get(ns.idFromName("global"));
-  const qs = c.req.query("debug") != null ? "?debug=1" : c.req.query("run") != null ? "?run=1" : "";
+  const qs = wantsDebug ? "?debug=1" : wantsRun ? "?run=1" : "";
   const resp = await stub.fetch(`https://ais/snapshot${qs}`);
   return new Response(await resp.text(), {
     headers: { "content-type": "application/json", "cache-control": "no-store" },

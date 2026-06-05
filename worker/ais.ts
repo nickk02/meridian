@@ -9,6 +9,7 @@ import type { Env } from "./index";
 
 const COLLECT_WINDOW_MS = 18_000; // listen window per collection
 const COLLECT_INTERVAL_MS = 10 * 60_000; // a window every 10 minutes
+const MIN_RUN_GAP_MS = 60_000; // floor between forced (?run) collections
 const MAX_VESSELS = 3000; // cap stored/served vessels (global AIS is a firehose)
 const STALE_MS = 2 * 3600_000; // drop positions older than 2h
 
@@ -40,8 +41,11 @@ export class AisCollector extends DurableObject<Env> {
   async fetch(req: Request): Promise<Response> {
     const params = new URL(req.url).searchParams;
     if (params.has("run")) {
-      // Force a collection window now (testing / manual refresh).
-      await this.ctx.storage.setAlarm(Date.now() + 200);
+      // Force a collection window now, but never tighter than MIN_RUN_GAP_MS
+      // since the last one, so a forced trigger cannot exceed the budget.
+      const m = this.ctx.storage.sql.exec("SELECT v FROM meta WHERE k = 'diag'").toArray();
+      const lastAt = m[0]?.v ? (JSON.parse(m[0].v as string).at ?? 0) : 0;
+      if (Date.now() - lastAt >= MIN_RUN_GAP_MS) await this.ctx.storage.setAlarm(Date.now() + 200);
     } else if ((await this.ctx.storage.getAlarm()) == null) {
       await this.ctx.storage.setAlarm(Date.now() + 500);
     }
