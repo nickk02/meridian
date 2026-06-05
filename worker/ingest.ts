@@ -11,8 +11,9 @@ import { nwsAdapter } from "./adapters/nws";
 import { nhcAdapter } from "./adapters/nhc";
 import { nifcAdapter } from "./adapters/nifc";
 import { cneosAdapter } from "./adapters/cneos";
-import { adsbAdapter } from "./adapters/adsb";
-import { digitrafficAdapter } from "./adapters/digitraffic";
+// adsb (aircraft) and digitraffic (vessels) are no longer ingested into D1:
+// they are fast-moving and dominated the write budget, so they are served as
+// live client overlays instead (see /api/aircraft and the global AIS overlay).
 import { launchAdapter } from "./adapters/launch";
 import { firmsAdapter } from "./adapters/firms";
 import { deriveLinks } from "./links";
@@ -28,8 +29,6 @@ const ADAPTERS = [
   nhcAdapter,
   nifcAdapter,
   cneosAdapter,
-  adsbAdapter,
-  digitrafficAdapter,
   launchAdapter,
   firmsAdapter,
   usgsSigAdapter,

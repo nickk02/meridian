@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
-import type {
-  GeoJSONSource,
-  MapGeoJSONFeature,
-  ExpressionSpecification,
-} from "maplibre-gl";
+import type { GeoJSONSource, ExpressionSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { FeatureCollection, Feature } from "geojson";
 import type { OntologyObject, OntologyLink } from "../../../shared/types";
@@ -12,6 +8,7 @@ import { isValidCoord } from "../../../shared/coords";
 import { darkBasemap } from "./style";
 import { fetchSats, propagateSats, type Sat } from "./satellites";
 import { fetchAis } from "./ais";
+import { fetchAircraft } from "./aircraft";
 import { computeTerminator } from "./terminator";
 
 interface Props {
@@ -164,6 +161,7 @@ export function MapView(props: Props) {
   const [satsOn, setSatsOn] = useState(true);
   const satsRef = useRef<Sat[]>([]);
   const [shipsOn, setShipsOn] = useState(true);
+  const [planesOn, setPlanesOn] = useState(true);
 
   // Init once.
   useEffect(() => {
@@ -358,6 +356,21 @@ export function MapView(props: Props) {
         },
       });
 
+      // Live aircraft overlay (ADS-B; polled, not in D1).
+      map.addSource("aircraft", { type: "geojson", data: emptyFc() });
+      map.addLayer({
+        id: "aircraft",
+        type: "circle",
+        source: "aircraft",
+        paint: {
+          "circle-color": "#8fb6ff",
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 1.6, 6, 3.4] as ExpressionSpecification,
+          "circle-opacity": 0.9,
+          "circle-stroke-width": 0.4,
+          "circle-stroke-color": "#070d1a",
+        },
+      });
+
       // Arrival pulses: an expanding, fading ring on each newly-arrived event,
       // driven by a per-feature progress value t (0..1) updated every frame.
       map.addSource("pulses", { type: "geojson", data: emptyFc() });
@@ -374,17 +387,67 @@ export function MapView(props: Props) {
         },
       });
 
-      map.on("click", "objects", (e) => {
-        const f = e.features?.[0] as MapGeoJSONFeature | undefined;
-        const id = f?.properties?.["id"];
-        if (typeof id === "string") onSelectRef.current(id);
-      });
+      // One click handler for everything, via queryRenderedFeatures with a pixel
+      // buffer (per-layer click events are unreliable on the globe projection, so
+      // we hit-test ourselves; the buffer makes tiny dots easy to hit). Ontology
+      // objects open the inspector; live overlays (aircraft, ships, satellites)
+      // are not ontology objects, so they get a lightweight identity popup.
+      const escapeHtml = (s: string) =>
+        s.replace(/[&<>"']/g, (ch) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch] as string,
+        );
+      let popup: maplibregl.Popup | null = null;
+      const overlayPopup = (lngLat: maplibregl.LngLat, kind: string, text: string) => {
+        if (!popup) {
+          popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, className: "mer-map-popup", maxWidth: "240px" });
+        }
+        popup
+          .setLngLat(lngLat)
+          .setHTML(`<span class="mer-popup-kind">${kind}</span><span class="mer-popup-name">${escapeHtml(text)}</span>`)
+          .addTo(map);
+      };
+      const BUF = 5;
+      const boxAt = (x: number, y: number): [[number, number], [number, number]] => [
+        [x - BUF, y - BUF],
+        [x + BUF, y + BUF],
+      ];
       map.on("click", (e) => {
-        const hits = map.queryRenderedFeatures(e.point, { layers: ["objects"] });
-        if (hits.length === 0) onSelectRef.current(null);
+        const box = boxAt(e.point.x, e.point.y);
+        const obj = map.queryRenderedFeatures(box, { layers: ["objects"] })[0];
+        if (obj && typeof obj.properties?.["id"] === "string") {
+          onSelectRef.current(obj.properties["id"]);
+          return;
+        }
+        const plane = map.queryRenderedFeatures(box, { layers: ["aircraft"] })[0];
+        if (plane) {
+          const m = plane.properties?.["model"];
+          const alt = plane.properties?.["alt"];
+          overlayPopup(e.lngLat, "AIRCRAFT", `${plane.properties?.["name"] ?? "unknown"}${m ? ` · ${m}` : ""}${alt ? ` · ${alt} ft` : ""}`);
+          onSelectRef.current(null);
+          return;
+        }
+        const ship = map.queryRenderedFeatures(box, { layers: ["ais"] })[0];
+        if (ship) {
+          overlayPopup(e.lngLat, "VESSEL", String(ship.properties?.["name"] ?? "unknown"));
+          onSelectRef.current(null);
+          return;
+        }
+        const sat = map.queryRenderedFeatures(box, { layers: ["sats"] })[0];
+        if (sat) {
+          const alt = sat.properties?.["alt"];
+          overlayPopup(e.lngLat, "SATELLITE", `${sat.properties?.["name"] ?? "unknown"}${alt != null ? ` · ${alt} km` : ""}`);
+          onSelectRef.current(null);
+          return;
+        }
+        onSelectRef.current(null);
       });
-      map.on("mouseenter", "objects", () => (map.getCanvas().style.cursor = "pointer"));
-      map.on("mouseleave", "objects", () => (map.getCanvas().style.cursor = ""));
+      // Pointer cursor over any clickable feature.
+      map.on("mousemove", (e) => {
+        const over = map.queryRenderedFeatures(boxAt(e.point.x, e.point.y), {
+          layers: ["objects", "aircraft", "ais", "sats"],
+        }).length > 0;
+        map.getCanvas().style.cursor = over ? "pointer" : "";
+      });
 
       readyRef.current = true;
       syncData();
@@ -489,6 +552,33 @@ export function MapView(props: Props) {
       if (id != null) window.clearInterval(id);
     };
   }, [shipsOn]);
+
+  // Poll the live aircraft snapshot and toggle the layer with planesOn.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    let alive = true;
+    let id: number | undefined;
+    const start = () => {
+      if (!alive) return;
+      if (map.getLayer("aircraft")) {
+        map.setLayoutProperty("aircraft", "visibility", planesOn ? "visible" : "none");
+      }
+      if (!planesOn) return;
+      const load = () =>
+        fetchAircraft().then((fc) => {
+          if (alive) (map.getSource("aircraft") as GeoJSONSource | undefined)?.setData(fc);
+        });
+      load();
+      id = window.setInterval(load, 30_000);
+    };
+    if (readyRef.current) start();
+    else map.once("load", start);
+    return () => {
+      alive = false;
+      if (id != null) window.clearInterval(id);
+    };
+  }, [planesOn]);
 
   // Drift the day-night terminator (recompute once a minute).
   useEffect(() => {
@@ -610,6 +700,13 @@ export function MapView(props: Props) {
           aria-pressed={shipsOn}
         >
           SHIPS
+        </button>
+        <button
+          className={`mer-proj-btn ${planesOn ? "on" : ""}`}
+          onClick={() => setPlanesOn((v) => !v)}
+          aria-pressed={planesOn}
+        >
+          PLANES
         </button>
       </div>
     </div>
