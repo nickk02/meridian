@@ -57,24 +57,33 @@ const TYPE_PARAMS: Record<string, TypeParam> = {
   ALERT: { epsKm: 60, epsHr: 12, minPts: 3 },
 };
 
-// Events within eps km AND eps hr of the anchor, by DIRECT distance. No
-// transitivity: this is what keeps a cluster tight around its anchor.
-function directMembers(pts: EvtPt[], anchorIdx: number, taken: boolean[], p: TypeParam): number[] {
-  const a = pts[anchorIdx];
-  const epsMs = p.epsHr * 3600_000;
-  const out: number[] = [anchorIdx];
-  for (let j = 0; j < pts.length; j++) {
-    if (j === anchorIdx || taken[j]) continue;
-    const b = pts[j];
-    if (Math.abs(a.ts - b.ts) > epsMs) continue;
-    if (haversineKm(a.lat, a.lon, b.lat, b.lon) > p.epsKm) continue;
-    out.push(j);
+// The types that cluster, derived once from TYPE_PARAMS so the SQL fetch and the
+// clustering guard can never list a different set (single source of truth).
+export const CLUSTER_TYPES = Object.keys(TYPE_PARAMS);
+
+// First index i with arr[i] >= x, over an ascending array (binary search).
+function lowerBound(arr: number[], x: number): number {
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (arr[mid] < x) lo = mid + 1;
+    else hi = mid;
   }
-  return out;
+  return lo;
+}
+
+// A member of an incident, with its distance and time offset FROM THE ANCHOR
+// computed once here so the DB-write path never recomputes haversine.
+interface IncMember {
+  id: string;
+  km: number;
+  dtHr: number;
 }
 
 export interface Incident {
   id: string;
+  type: string;
   label: string;
   domain: string;
   centroid_lat: number;
@@ -83,13 +92,21 @@ export interface Incident {
   t_end: number;
   member_count: number;
   severity_max: number;
-  memberIds: string[];
+  members: IncMember[]; // includes the anchor (km 0, dtHr 0)
   anchorId: string;
 }
 
 const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 
 // Pure clustering: events -> incidents. Tested without a database.
+//
+// Determinism: anchors are selected in a TOTAL order (severity desc, then ts
+// asc, then id) so identical input always produces identical incidents; there
+// is no tie left to iteration order. Overlap: when two candidate clusters share
+// border events, the stronger anchor (processed first) claims the shared events,
+// and a weaker overlapping cluster is absorbed into it rather than duplicated.
+// Members are always within eps of their own anchor, so absorption never moves
+// an event outside its stated proximity.
 export function computeIncidents(events: EvtPt[]): Incident[] {
   const byType = new Map<string, EvtPt[]>();
   for (const e of events) {
@@ -102,34 +119,58 @@ export function computeIncidents(events: EvtPt[]): Incident[] {
   const incidents: Incident[] = [];
   for (const [type, pts] of byType) {
     const param = TYPE_PARAMS[type];
-    // Process strongest-first so the most significant event anchors its cluster,
-    // then earliest as a stable tiebreak. order = indices into pts.
+    const n = pts.length;
+    // Anchor-selection order: strongest, then earliest, then id (a total order).
     const order = pts
       .map((_, i) => i)
-      .sort((a, b) => pts[b].severity - pts[a].severity || pts[a].ts - pts[b].ts);
-    const taken = new Array(pts.length).fill(false);
+      .sort(
+        (a, b) =>
+          pts[b].severity - pts[a].severity ||
+          pts[a].ts - pts[b].ts ||
+          (pts[a].id < pts[b].id ? -1 : pts[a].id > pts[b].id ? 1 : 0),
+      );
+    // Latitude-sorted index so neighbor search scans only a latitude band of
+    // width 2*eps instead of all n points (turns the per-anchor scan from O(n)
+    // into O(band)). 1 deg latitude >= 110.5 km, so epsKm/110 deg is a safe,
+    // slightly wide band: every true neighbor falls inside it.
+    const latOrder = pts.map((_, i) => i).sort((a, b) => pts[a].lat - pts[b].lat);
+    const lats = latOrder.map((i) => pts[i].lat);
+    const degBand = param.epsKm / 110;
+    const epsMs = param.epsHr * 3600_000;
+    const taken = new Array(n).fill(false);
 
     for (const ai of order) {
       if (taken[ai]) continue;
-      const idx = directMembers(pts, ai, taken, param);
-      if (idx.length < param.minPts) continue; // not a cluster; anchor stays free as a potential member
-      for (const k of idx) taken[k] = true;
-      const members = idx.map((k) => pts[k]);
-      const anchor = pts[ai];
-      const lat = round(members.reduce((s, m) => s + m.lat, 0) / members.length, 4);
-      const lon = round(members.reduce((s, m) => s + m.lon, 0) / members.length, 4);
+      const a = pts[ai];
+      const lo = lowerBound(lats, a.lat - degBand);
+      const hi = lowerBound(lats, a.lat + degBand + 1e-9);
+      const members: { idx: number; km: number; dtHr: number }[] = [{ idx: ai, km: 0, dtHr: 0 }];
+      for (let p = lo; p < hi; p++) {
+        const j = latOrder[p];
+        if (j === ai || taken[j]) continue;
+        const b = pts[j];
+        const dt = Math.abs(a.ts - b.ts);
+        if (dt > epsMs) continue;
+        const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+        if (km > param.epsKm) continue;
+        members.push({ idx: j, km, dtHr: dt / 3600_000 });
+      }
+      if (members.length < param.minPts) continue; // not a cluster; anchor stays free
+      for (const m of members) taken[m.idx] = true;
+      const pm = members.map((m) => pts[m.idx]);
       incidents.push({
-        id: `INC-${type}-${anchor.id}`,
-        label: `${type[0] + type.slice(1).toLowerCase()} cluster: ${anchor.name} +${members.length - 1}`,
-        domain: anchor.domain,
-        centroid_lat: lat,
-        centroid_lon: lon,
-        t_start: Math.min(...members.map((m) => m.ts)),
-        t_end: Math.max(...members.map((m) => m.ts)),
+        id: `INC-${type}-${a.id}`,
+        type,
+        label: `${type[0] + type.slice(1).toLowerCase()} cluster: ${a.name} +${members.length - 1}`,
+        domain: a.domain,
+        centroid_lat: round(pm.reduce((s, m) => s + m.lat, 0) / pm.length, 4),
+        centroid_lon: round(pm.reduce((s, m) => s + m.lon, 0) / pm.length, 4),
+        t_start: Math.min(...pm.map((m) => m.ts)),
+        t_end: Math.max(...pm.map((m) => m.ts)),
         member_count: members.length,
-        severity_max: Math.max(...members.map((m) => m.severity)),
-        memberIds: members.map((m) => m.id),
-        anchorId: anchor.id,
+        severity_max: Math.max(...pm.map((m) => m.severity)),
+        members: members.map((m) => ({ id: pts[m.idx].id, km: round(m.km, 1), dtHr: round(m.dtHr, 1) })),
+        anchorId: a.id,
       });
     }
   }
@@ -140,11 +181,13 @@ export async function correlate(
   db: D1Database,
   now: number,
 ): Promise<{ incidents: number; correlatedLinks: number }> {
+  const placeholders = CLUSTER_TYPES.map(() => "?").join(",");
   const { results } = await db
     .prepare(
       `SELECT id, type, domain, name, lat, lon, ts, severity FROM objects
-        WHERE type IN ('SEISMIC','WILDFIRE','FLOOD','ALERT')`,
+        WHERE type IN (${placeholders})`,
     )
+    .bind(...CLUSTER_TYPES)
     .all<EvtPt>();
   const incidents = computeIncidents(results);
 
@@ -154,7 +197,6 @@ export async function correlate(
   await db.prepare("DELETE FROM links WHERE kind = 'CORRELATED_WITH'").run();
   if (incidents.length === 0) return { incidents: 0, correlatedLinks: 0 };
 
-  const byId = new Map(results.map((e) => [e.id, e]));
   const incStmt = db.prepare(
     `INSERT INTO incidents (id, label, domain, centroid_lat, centroid_lon,
        t_start, t_end, member_count, severity_max, created_ts)
@@ -174,21 +216,19 @@ export async function correlate(
         inc.t_start, inc.t_end, inc.member_count, inc.severity_max, now)
       .run();
     const batch = [];
-    for (const mid of inc.memberIds) {
-      batch.push(assignStmt.bind(inc.id, mid));
-      if (mid === inc.anchorId) continue;
-      const a = byId.get(mid)!;
-      const b = byId.get(inc.anchorId)!;
-      const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
-      const dtHr = Math.abs(a.ts - b.ts) / 3600_000;
-      const conf = Math.max(0.3, round(1 - km / 1000 - dtHr / 240));
+    for (const m of inc.members) {
+      batch.push(assignStmt.bind(inc.id, m.id));
+      if (m.id === inc.anchorId) continue;
+      // km and dtHr were computed during clustering (relative to the anchor); no
+      // haversine recompute here.
+      const conf = Math.max(0.3, round(1 - m.km / 1000 - m.dtHr / 240));
       batch.push(
         linkStmt.bind(
-          `CORRELATED_WITH|${mid}|${inc.anchorId}`,
-          mid,
+          `CORRELATED_WITH|${m.id}|${inc.anchorId}`,
+          m.id,
           inc.anchorId,
-          `spatiotemporal:${CLUSTER_METHOD} type=${a.type}`,
-          JSON.stringify({ km: round(km, 1), hours: round(dtHr, 1), incident: inc.id }),
+          `spatiotemporal:${CLUSTER_METHOD} type=${inc.type}`,
+          JSON.stringify({ km: m.km, hours: m.dtHr, incident: inc.id }),
           conf,
           now,
         ),
