@@ -13,7 +13,7 @@ import { addMapIcons, ICON_IMAGE } from "./icons";
 import {
   fetchSats,
   propagateSatsRaw,
-  orbitArcs,
+  orbitForRec,
   type Sat,
   type SatPoint,
   type OrbitArc,
@@ -207,10 +207,6 @@ function applyGlobeSky(map: maplibregl.Map) {
   });
 }
 
-// Number of low-orbit satellites whose full orbital arc is drawn at once. Capped
-// so the globe shows several orbit rings, not a spaghetti of every track.
-const ORBIT_CAP = 26;
-
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (ch) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch] as string,
@@ -237,7 +233,9 @@ export function MapView(props: Props) {
   // animation tick and the React effects can rebuild the layers cheaply.
   const deckRef = useRef<MapboxOverlay | null>(null);
   const satPointsRef = useRef<SatPoint[]>([]);
-  const orbitsRef = useRef<OrbitArc[]>([]);
+  // The hovered/selected satellite, if any: only its orbital arc is drawn.
+  const hoverSatRef = useRef<SatPoint | null>(null);
+  const selectSatRef = useRef<SatPoint | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
 
   // Shared identity popup for live overlays (used by both the MapLibre click
@@ -264,24 +262,33 @@ export function MapView(props: Props) {
     if (satsOnRef.current) {
       const onGlobe = globeRef.current;
       const altScale = onGlobe ? 1 : 0;
-      if (onGlobe && orbitsRef.current.length) {
-        layers.push(
-          new PathLayer<OrbitArc>({
-            id: "sat-orbits",
-            data: orbitsRef.current,
-            getPath: (d) => d.path,
-            getColor: [110, 214, 240, 130],
-            getWidth: 1.4,
-            widthUnits: "pixels",
-            widthMinPixels: 1.1,
-            jointRounded: true,
-            capRounded: true,
-            // Test against the globe's depth so back-of-globe arcs are occluded;
-            // do not write depth (translucent overlapping arcs blend cleanly).
-            parameters: { depthCompare: "less-equal", depthWriteEnabled: false },
-            pickable: false,
-          }),
-        );
+      // Orbit arc only for the hovered/selected sat (globe only): a payoff for
+      // inspecting one orbit, not a permanent cage over the whole globe.
+      if (onGlobe) {
+        const focus: SatPoint[] = [];
+        for (const s of [selectSatRef.current, hoverSatRef.current]) {
+          if (s && !focus.some((f) => f.name === s.name)) focus.push(s);
+        }
+        if (focus.length) {
+          const arcs: OrbitArc[] = focus.flatMap((s) => orbitForRec(s.name, s.rec, new Date()));
+          layers.push(
+            new PathLayer<OrbitArc>({
+              id: "sat-orbit",
+              data: arcs,
+              getPath: (d) => d.path,
+              getColor: [120, 230, 255, 220],
+              getWidth: 2,
+              widthUnits: "pixels",
+              widthMinPixels: 1.5,
+              jointRounded: true,
+              capRounded: true,
+              // Test against the globe's depth so the back half of the orbit is
+              // occluded; do not write depth so the arc blends over the surface.
+              parameters: { depthCompare: "less-equal", depthWriteEnabled: false },
+              pickable: false,
+            }),
+          );
+        }
       }
       // Soft halo behind each sat so the orbital shell reads against space.
       if (onGlobe) {
@@ -315,18 +322,25 @@ export function MapView(props: Props) {
           lineWidthMinPixels: 0.5,
           pickable: true,
           parameters: { depthCompare: "less-equal" },
-          onClick: (info) => {
-            const d = info.object as SatPoint | undefined;
-            if (!d) return false;
-            showPopup([d.lon, d.lat], "SATELLITE", `${d.name}${Number.isFinite(d.altKm) ? ` · ${Math.round(d.altKm)} km` : ""}`);
-            onSelectRef.current(null);
-            return true;
+          // Hover draws that sat's orbit; rebuild only when the identity changes
+          // so a steady hover does not thrash the layer every pointer move.
+          onHover: (info) => {
+            const d = (info.object as SatPoint | undefined) ?? null;
+            if ((d?.name ?? null) !== (hoverSatRef.current?.name ?? null)) {
+              hoverSatRef.current = d;
+              buildDeckRef.current?.();
+            }
+            return false;
           },
         }),
       );
     }
     overlay.setProps({ layers });
-  }, [showPopup]);
+  }, []);
+  // buildDeck calls itself from a deck callback, so route through a ref to avoid
+  // a stale closure and a self-referential useCallback dependency.
+  const buildDeckRef = useRef(buildDeck);
+  buildDeckRef.current = buildDeck;
 
   // Init once.
   useEffect(() => {
@@ -462,6 +476,10 @@ export function MapView(props: Props) {
           "icon-size": ICON_SIZE,
           "icon-allow-overlap": ["step", ["zoom"], false, 7, true] as unknown as boolean,
           "icon-padding": 2,
+          // Billboard: always face the camera and stay upright, so glyphs near
+          // the globe limb are not skewed by the surface tangent.
+          "icon-rotation-alignment": "viewport",
+          "icon-pitch-alignment": "viewport",
         },
         paint: {
           "icon-color": COLOR,
@@ -539,6 +557,9 @@ export function MapView(props: Props) {
           "icon-size": ["interpolate", ["linear"], ["zoom"], 5, 0.42, 9, 0.62] as ExpressionSpecification,
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
+          // Billboard so harbor ship glyphs stay upright facing the camera.
+          "icon-rotation-alignment": "viewport",
+          "icon-pitch-alignment": "viewport",
         },
         paint: {
           "icon-color": "#6ef0a0",
@@ -621,6 +642,21 @@ export function MapView(props: Props) {
           onSelectRef.current(null);
           return;
         }
+        // Satellites are deck.gl objects: pick them via the overlay. Selecting one
+        // pins its orbital arc until the next empty click.
+        const satInfo = deckRef.current?.pickObject({ x: e.point.x, y: e.point.y, radius: 8, layerIds: ["sat-points"] });
+        const sat = satInfo?.object as SatPoint | undefined;
+        if (sat) {
+          selectSatRef.current = sat;
+          showPopup([sat.lon, sat.lat], "SATELLITE", `${sat.name}${Number.isFinite(sat.altKm) ? ` · ${Math.round(sat.altKm)} km` : ""}`);
+          onSelectRef.current(null);
+          buildDeck();
+          return;
+        }
+        if (selectSatRef.current) {
+          selectSatRef.current = null;
+          buildDeck();
+        }
         onSelectRef.current(null);
       });
       // Pointer cursor over any clickable feature.
@@ -684,16 +720,15 @@ export function MapView(props: Props) {
 
   useEffect(syncData);
 
-  // Load TLEs once on mount, refresh hourly. Also precompute the orbital arcs for
-  // the capped low-orbit subset (they barely change over minutes), so the per-2s
-  // tick only has to repropagate the live points.
+  // Load TLEs once on mount, refresh hourly. An orbit arc is now computed on
+  // demand only for the hovered/selected sat, so the load just propagates the
+  // live points.
   useEffect(() => {
     let alive = true;
     const load = () =>
       fetchSats().then((s) => {
         if (!alive) return;
         satsRef.current = s;
-        orbitsRef.current = orbitArcs(s, new Date(), ORBIT_CAP);
         satPointsRef.current = propagateSatsRaw(s, new Date());
         buildDeck();
       });
