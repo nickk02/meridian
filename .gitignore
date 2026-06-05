@@ -5,6 +5,10 @@ dist/
 *.log
 .DS_Store
 
+# Local-only verification tooling and screenshots (Playwright via installed Edge)
+.local-shot-*.png
+/scripts/
+
 # Claude / agent artifacts, never committed
 .remember/
 .claude/

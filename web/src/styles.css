@@ -188,3 +188,106 @@ body {
 .mer-status-dot.idle {
   background: var(--mer-text-dim);
 }
+
+/* ----- Map + center body -------------------------------------------------- */
+
+.mer-center-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.mer-map {
+  position: absolute;
+  inset: 0;
+}
+
+/* Dark, square MapLibre chrome to match the console. */
+.maplibregl-ctrl-group {
+  background: var(--mer-panel-raised) !important;
+  border: 1px solid var(--mer-border) !important;
+  border-radius: 0 !important;
+}
+.maplibregl-ctrl-group button {
+  background: transparent !important;
+}
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--mer-border) !important;
+}
+.maplibregl-ctrl-icon {
+  filter: invert(0.85);
+}
+.maplibregl-ctrl-attrib {
+  background: rgba(10, 14, 20, 0.7) !important;
+  color: var(--mer-text-dim);
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--mer-cyan-dim);
+}
+
+/* ----- Layer tree --------------------------------------------------------- */
+
+.mer-field-label {
+  font-family: var(--mer-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--mer-text-dim);
+  margin-bottom: 6px;
+}
+
+.mer-layer-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mer-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.08);
+}
+
+.mer-tree .bp5-tree-node-content {
+  height: 28px;
+}
+
+/* ----- Inspector ---------------------------------------------------------- */
+
+.mer-insp-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e6ecf3;
+  line-height: 1.35;
+  margin-bottom: 10px;
+}
+
+.mer-insp-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.mer-kv {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  row-gap: 7px;
+  column-gap: 10px;
+  font-size: 12px;
+}
+.mer-kv > span:nth-child(odd) {
+  font-family: var(--mer-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--mer-text-dim);
+  align-self: center;
+}
+.mer-kv > span:nth-child(even) {
+  color: #c6d0de;
+}
+.mer-ellip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

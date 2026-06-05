@@ -1,60 +1,54 @@
-import { useEffect, useState } from "react";
-import {
-  Navbar,
-  NavbarGroup,
-  Alignment,
-  Tabs,
-  Tab,
-  Tag,
-  Icon,
-} from "@blueprintjs/core";
-import type { HealthResponse } from "../../shared/types";
-
-type ApiState = "idle" | "ok" | "down";
-
-function useUtcClock(): string {
-  const [now, setNow] = useState<string>(() => formatUtc(new Date()));
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(formatUtc(new Date())), 1000);
-    return () => window.clearInterval(id);
-  }, []);
-  return now;
-}
-
-function formatUtc(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ` +
-    `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`
-  );
-}
-
-function useApiHealth(): ApiState {
-  const [state, setState] = useState<ApiState>("idle");
-  useEffect(() => {
-    let alive = true;
-    const ping = async () => {
-      try {
-        const res = await fetch("/api/health");
-        const body = (await res.json()) as HealthResponse;
-        if (alive) setState(body.ok ? "ok" : "down");
-      } catch {
-        if (alive) setState("down");
-      }
-    };
-    ping();
-    const id = window.setInterval(ping, 30_000);
-    return () => {
-      alive = false;
-      window.clearInterval(id);
-    };
-  }, []);
-  return state;
-}
+import { useEffect, useMemo, useState } from "react";
+import { Navbar, NavbarGroup, Alignment, Tabs, Tab, Tag, Icon } from "@blueprintjs/core";
+import type { ObjectType } from "../../shared/types";
+import { useOntology, useUtcClock } from "./hooks";
+import { MapView } from "./map/MapView";
+import { LayerTree } from "./components/LayerTree";
+import { Inspector } from "./components/Inspector";
 
 export function App() {
   const clock = useUtcClock();
-  const api = useApiHealth();
+  const onto = useOntology();
+  const [visible, setVisible] = useState<Set<string>>(new Set());
+  const [severityMin, setSeverityMin] = useState(1);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [tab, setTab] = useState<string>("map");
+
+  // Default every type visible the first time the registry loads.
+  useEffect(() => {
+    if (onto.types.length && visible.size === 0) {
+      setVisible(new Set(onto.types.map((t) => t.id)));
+    }
+  }, [onto.types, visible.size]);
+
+  const typeMap = useMemo(
+    () => new Map<string, ObjectType>(onto.types.map((t) => [t.id, t])),
+    [onto.types],
+  );
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const o of onto.objects) m.set(o.type, (m.get(o.type) ?? 0) + 1);
+    return m;
+  }, [onto.objects]);
+
+  const shownCount = useMemo(
+    () =>
+      onto.objects.filter((o) => visible.has(o.type) && o.severity >= severityMin)
+        .length,
+    [onto.objects, visible, severityMin],
+  );
+
+  const selected = useMemo(
+    () => onto.objects.find((o) => o.id === selectedId) ?? null,
+    [onto.objects, selectedId],
+  );
+
+  const toggle = (id: string) =>
+    setVisible((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   return (
     <div className="mer-shell">
@@ -66,13 +60,23 @@ export function App() {
           </div>
         </NavbarGroup>
         <NavbarGroup align={Alignment.RIGHT}>
+          <Tag minimal className="mer-mono" style={{ marginRight: 10 }}>
+            {onto.objects.length} OBJECTS
+          </Tag>
+          <Tag minimal className="mer-mono" style={{ marginRight: 10 }}>
+            {onto.links.length} LINKS
+          </Tag>
           <Tag
             minimal
-            intent={api === "ok" ? "success" : api === "down" ? "danger" : "none"}
+            intent={onto.status === "ok" ? "success" : onto.status === "down" ? "danger" : "none"}
             className="mer-mono"
           >
-            <span className={`mer-status-dot ${api === "ok" ? "ok" : api === "down" ? "down" : "idle"}`} />
-            API {api.toUpperCase()}
+            <span
+              className={`mer-status-dot ${
+                onto.status === "ok" ? "ok" : onto.status === "down" ? "down" : "idle"
+              }`}
+            />
+            FEED {onto.status.toUpperCase()}
           </Tag>
           <span style={{ width: 16 }} />
           <span className="mer-clock">
@@ -84,35 +88,55 @@ export function App() {
 
       <div className="mer-body">
         <aside className="mer-rail">
-          <div className="mer-section-head">
-            <span>Ontology Layers</span>
-            <Icon icon="layers" size={12} />
-          </div>
-          <div className="mer-empty">
-            No layers yet. Ingestion arrives in Phase 3; the layer tree and live
-            counts mount here.
-          </div>
+          {onto.loaded ? (
+            <LayerTree
+              types={onto.types}
+              counts={counts}
+              visible={visible}
+              onToggle={toggle}
+              severityMin={severityMin}
+              onSeverityMin={setSeverityMin}
+              shown={shownCount}
+              total={onto.objects.length}
+            />
+          ) : (
+            <>
+              <div className="mer-section-head">
+                <span>Ontology Layers</span>
+                <Icon icon="layers" size={12} />
+              </div>
+              <div className="mer-empty">
+                {onto.status === "down"
+                  ? "Feed unavailable. The data API is not bound yet."
+                  : "Loading ontology..."}
+              </div>
+            </>
+          )}
         </aside>
 
         <main className="mer-center">
-          <Tabs id="mer-view" className="mer-tabs" selectedTabId="map">
+          <Tabs id="mer-view" className="mer-tabs" selectedTabId={tab} onChange={(t) => setTab(String(t))}>
             <Tab id="map" title="MAP" />
             <Tab id="graph" title="GRAPH" />
           </Tabs>
-          <div className="mer-center-placeholder">
-            MAP SURFACE / PHASE 5
+          <div className="mer-center-body">
+            {tab === "map" ? (
+              <MapView
+                objects={onto.objects}
+                links={onto.links}
+                visibleTypes={visible}
+                severityMin={severityMin}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+              />
+            ) : (
+              <div className="mer-center-placeholder">EGO GRAPH / PHASE 6</div>
+            )}
           </div>
         </main>
 
         <aside className="mer-inspector">
-          <div className="mer-section-head">
-            <span>Inspector</span>
-            <Icon icon="selection" size={12} />
-          </div>
-          <div className="mer-empty">
-            No object selected. Select an object on the map to inspect its type,
-            severity, geometry, links, and audited actions.
-          </div>
+          <Inspector object={selected} typeMap={typeMap} />
         </aside>
       </div>
 
@@ -122,8 +146,7 @@ export function App() {
           <Icon icon="history" size={12} />
         </div>
         <div className="mer-empty">
-          Audit trail is empty. Operator actions appear here once the ontology is
-          live.
+          Audit trail is empty. Operator actions appear here once enabled in Phase 6.
         </div>
       </footer>
     </div>
