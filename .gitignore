@@ -9,6 +9,10 @@ dist/
 .local-shot-*.png
 /scripts/
 
+# Cloudflare API token, never committed
+*.cf-token
+.cf-token
+
 # Claude / agent artifacts, never committed
 .remember/
 .claude/
