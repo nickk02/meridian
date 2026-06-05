@@ -44,14 +44,29 @@ function parseUtc(s: string | undefined): number {
   return Number.isFinite(t) ? t : 0;
 }
 
+// Keep only recent disasters: GDACS tracks events for 3-5 months, but a months-
+// old closed disaster has no fresh detail-feed counterpart, so it can never
+// corroborate and only clutters the map. Bounding to this window aligns GDACS
+// with the detail feeds (USGS 30-day, FIRMS/NWS fresh).
+const MAX_AGE_MS = 30 * 24 * 3600_000;
+
 export function normalizeGdacs(feed: GdacsFeed): IngestObject[] {
   const out: IngestObject[] = [];
+  const now = Date.now();
   for (const f of feed.features ?? []) {
     const p = f.properties;
     const type = TYPE[p.eventtype];
     if (!type || !f.geometry || f.geometry.type !== "Point") continue;
     const [lon, lat] = f.geometry.coordinates;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    // Timestamp for correlation: a drought is an ongoing condition (use when it
+    // was last updated), every other type is a point event (use when it struck),
+    // so its time aligns with the same event in the detail feeds.
+    const ts =
+      type === "DROUGHT"
+        ? parseUtc(p.datemodified) || parseUtc(p.fromdate)
+        : parseUtc(p.fromdate) || parseUtc(p.datemodified);
+    if (ts > 0 && now - ts > MAX_AGE_MS) continue; // drop stale disasters
     out.push({
       id: `GDACS-${p.eventtype}-${p.eventid}`,
       type,
@@ -59,7 +74,7 @@ export function normalizeGdacs(feed: GdacsFeed): IngestObject[] {
       lat,
       lon,
       severity: SEVERITY[p.alertlevel] ?? 2,
-      ts: parseUtc(p.datemodified) || parseUtc(p.fromdate),
+      ts,
       source: "gdacs",
       admin0: p.iso3 && p.iso3.length === 3 ? p.iso3 : undefined,
       props: {
