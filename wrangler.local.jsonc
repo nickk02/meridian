@@ -1,0 +1,30 @@
+{
+  // LOCAL DEVELOPMENT ONLY. Mirrors wrangler.jsonc and adds the D1/KV bindings
+  // with placeholder ids. Used via `--config wrangler.local.jsonc --local`,
+  // which never contacts the Cloudflare account, so the placeholder ids are
+  // fine. Cloudflare Workers Builds uses wrangler.jsonc, not this file.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "meridian",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "meridian",
+      "database_id": "local-placeholder",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "kv_namespaces": [
+    { "binding": "CACHE", "id": "local-placeholder" }
+  ]
+}

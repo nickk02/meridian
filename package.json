@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --config wrangler.local.jsonc",
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "deploy": "wrangler deploy",
-    "migrate:local": "wrangler d1 migrations apply DB --local",
-    "migrate:remote": "wrangler d1 migrations apply DB --remote"
+    "migrate:local": "wrangler d1 migrations apply DB --config wrangler.local.jsonc --local",
+    "migrate:remote": "wrangler d1 migrations apply meridian --remote"
   },
   "dependencies": {
     "@blueprintjs/core": "^5.16.0",

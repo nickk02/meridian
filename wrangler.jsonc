@@ -15,22 +15,24 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
-  // Scheduled ingestion. Handler is a no-op until Phase 3.
+  // Scheduled ingestion every 15 minutes.
   "triggers": {
     "crons": ["*/15 * * * *"]
   }
 
   // ---------------------------------------------------------------------------
-  // OPERATOR STEP (Phase 2): create D1 and KV, then uncomment and paste IDs.
-  //   wrangler d1 create meridian
-  //   wrangler kv namespace create CACHE
-  // Then add:
+  // D1 and KV bindings are intentionally absent here until the operator-owned
+  // database_id exists, so each push keeps deploying green. Local development
+  // uses wrangler.local.jsonc (real bindings, local SQLite). The moment the id
+  // is known, add:
   //
   // "d1_databases": [
-  //   { "binding": "DB", "database_name": "meridian", "database_id": "<paste-here>" }
+  //   { "binding": "DB", "database_name": "meridian", "database_id": "<id>",
+  //     "migrations_dir": "migrations" }
   // ],
-  // "kv_namespaces": [
-  //   { "binding": "CACHE", "id": "<paste-here>" }
-  // ]
+  // "kv_namespaces": [ { "binding": "CACHE", "id": "<id>" } ]
+  //
+  // and set the Cloudflare Workers Builds deploy command to:
+  //   npx wrangler d1 migrations apply meridian --remote && npx wrangler deploy
   // ---------------------------------------------------------------------------
 }
