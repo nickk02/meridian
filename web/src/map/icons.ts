@@ -104,8 +104,19 @@ function rasterize(svg: string, px: number): Promise<ImageData> {
 }
 
 // The satellite glyph as a 64px PNG data URL, for the deck.gl IconLayer that
-// draws sats at orbital altitude. Used as a mask icon (alpha = glyph), tinted at
-// runtime, so it reads as a satellite rather than a bare dot.
+// draws sats at orbital altitude. Baked in a light color and used as a plain
+// (non-mask) icon: deck's mask-icon path renders blank in the interleaved globe
+// overlay, so we draw the final color into the image and skip masking.
+const SAT_COLOR = "#e2f2ff";
+const SAT_SVG =
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="64" height="64">` +
+  `<rect fill="${SAT_COLOR}" x="9.6" y="8.8" width="4.8" height="6.4" rx="0.8"/>` +
+  `<rect fill="${SAT_COLOR}" x="1.6" y="9.9" width="6" height="4.2" rx="0.4"/>` +
+  `<rect fill="${SAT_COLOR}" x="16.4" y="9.9" width="6" height="4.2" rx="0.4"/>` +
+  `<path fill="none" stroke="${SAT_COLOR}" stroke-width="2.3" stroke-linecap="round" d="M7.6 12h2M14.4 12h2M12 8.8V4.6"/>` +
+  `<circle fill="${SAT_COLOR}" cx="12" cy="3.8" r="1.2"/>` +
+  `</svg>`;
+
 export function loadSatelliteImage(): Promise<string> {
   return new Promise((resolve, reject) => {
     const px = 64;
@@ -124,7 +135,7 @@ export function loadSatelliteImage(): Promise<string> {
       resolve(canvas.toDataURL("image/png"));
     };
     img.onerror = () => reject(new Error("svg rasterize failed"));
-    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgDoc(GLYPH.SATELLITE));
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(SAT_SVG);
   });
 }
 
