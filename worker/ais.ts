@@ -102,7 +102,13 @@ export class AisCollector extends DurableObject<Env> {
       const timer = setTimeout(finish, COLLECT_WINDOW_MS);
       ws.addEventListener("message", (ev) => {
         try {
-          const data = typeof ev.data === "string" ? ev.data : "";
+          // aisstream sends JSON in BINARY (ArrayBuffer) frames, not text.
+          const data =
+            typeof ev.data === "string"
+              ? ev.data
+              : ev.data instanceof ArrayBuffer
+                ? new TextDecoder().decode(ev.data)
+                : "";
           total++;
           if (total <= 1) sample = data.slice(0, 240);
           const msg = JSON.parse(data) as {
