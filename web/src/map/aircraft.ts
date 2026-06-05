@@ -28,6 +28,8 @@ export async function fetchAircraft(): Promise<FeatureCollection> {
           name: a.name,
           alt: a.alt ?? 0,
           model: a.model ?? "",
+          // Track in degrees clockwise from north; rotates the plane glyph.
+          heading: a.track ?? 0,
         },
       });
     }
