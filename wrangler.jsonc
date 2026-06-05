@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "meridian",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  // The SPA build output. The Worker runs first for any path that is not a
+  // built asset; for non /api paths the Worker forwards to ASSETS, which
+  // returns index.html via single-page-application fallback.
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  // Scheduled ingestion. Handler is a no-op until Phase 3.
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  }
+
+  // ---------------------------------------------------------------------------
+  // OPERATOR STEP (Phase 2): create D1 and KV, then uncomment and paste IDs.
+  //   wrangler d1 create meridian
+  //   wrangler kv namespace create CACHE
+  // Then add:
+  //
+  // "d1_databases": [
+  //   { "binding": "DB", "database_name": "meridian", "database_id": "<paste-here>" }
+  // ],
+  // "kv_namespaces": [
+  //   { "binding": "CACHE", "id": "<paste-here>" }
+  // ]
+  // ---------------------------------------------------------------------------
+}

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.log
+.DS_Store
+
+# Claude / agent artifacts, never committed
+.remember/
+.claude/
+CLAUDE.md
+AGENTS.md
