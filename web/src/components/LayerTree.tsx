@@ -50,6 +50,7 @@ export function LayerTree(props: Props) {
       <div className="mer-pad" style={{ paddingBottom: 4 }}>
         <div className="mer-field-label">SEVERITY FLOOR</div>
         <SegmentedControl
+          className="mer-sev-seg"
           fill
           small
           value={String(props.severityMin)}

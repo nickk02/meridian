@@ -21,6 +21,23 @@ interface Props {
 
 const ANCHOR = new Set(["PORT", "CHOKEPOINT", "AIRPORT"]);
 
+// Home camera: planet upright (bearing 0, pitch 0), poles vertical. Both the
+// fly-in target and the Reset View control return here.
+const HOME = { center: [12, 28] as [number, number], zoom: 1.6, bearing: 0, pitch: 0 };
+
+// Reject objects with bad/null coordinates so they never reach the map. Null
+// Island (0,0) is effectively always bad upstream data, and a link with one
+// endpoint there draws a stray line across the globe.
+function validCoord(o: { lat: number; lon: number }): boolean {
+  return (
+    Number.isFinite(o.lat) &&
+    Number.isFinite(o.lon) &&
+    Math.abs(o.lat) <= 90 &&
+    Math.abs(o.lon) <= 180 &&
+    !(o.lat === 0 && o.lon === 0)
+  );
+}
+
 // Severity ramp for dynamic events; anchors keep their infrastructure colors.
 const COLOR: ExpressionSpecification = [
   "match",
@@ -162,10 +179,10 @@ export function MapView(props: Props) {
       if (startGlobe) {
         map.setProjection({ type: "globe" });
         applyGlobeSky(map);
-        // Fly-in: ease up from deep space to a framed globe with a slow drift.
+        // Fly-in: ease straight up from deep space to the upright home framing.
+        // No bearing/pitch change, so the poles stay vertical on load.
         map.easeTo({
-          zoom: 1.6,
-          bearing: -18,
+          ...HOME,
           duration: 4200,
           easing: (t) => 1 - Math.pow(1 - t, 3),
         });
@@ -286,10 +303,13 @@ export function MapView(props: Props) {
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
     const { objects, links, visibleTypes, severityMin, selectedId } = props;
+    // Drop bad-coordinate objects up front so neither dots nor links can render
+    // to Null Island; links to a dropped object are skipped (endpoint missing).
+    const objs = objects.filter(validCoord);
     const visible = (o: OntologyObject) =>
       visibleTypes.has(o.type) && o.severity >= severityMin;
-    const shown = objects.filter(visible);
-    const byId = new Map(objects.map((o) => [o.id, o]));
+    const shown = objs.filter(visible);
+    const byId = new Map(objs.map((o) => [o.id, o]));
 
     (map.getSource("objects") as GeoJSONSource | undefined)?.setData(objectsGeo(shown));
     (map.getSource("links") as GeoJSONSource | undefined)?.setData(
@@ -303,20 +323,26 @@ export function MapView(props: Props) {
 
   useEffect(syncData);
 
-  // Toggle projection after init. Switching to globe re-applies the sky and
-  // flies in; switching to flat eases the bearing back to north.
+  // Toggle projection after init. Either way the camera returns upright
+  // (bearing 0, pitch 0) so the poles stay vertical.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
     if (globe) {
       map.setProjection({ type: "globe" });
       applyGlobeSky(map);
-      map.easeTo({ zoom: Math.max(map.getZoom(), 1.6), bearing: -18, duration: 1600 });
+      map.easeTo({ zoom: Math.max(map.getZoom(), 1.6), bearing: 0, pitch: 0, duration: 1600 });
     } else {
       map.setProjection({ type: "mercator" });
       map.easeTo({ bearing: 0, pitch: 0, duration: 800 });
     }
   }, [globe]);
+
+  const resetView = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.easeTo({ ...HOME, duration: 900 });
+  };
 
   return (
     <div className="mer-map-wrap">
@@ -335,6 +361,9 @@ export function MapView(props: Props) {
           aria-pressed={!globe}
         >
           FLAT
+        </button>
+        <button className="mer-proj-btn mer-proj-reset" onClick={resetView}>
+          RESET VIEW
         </button>
       </div>
     </div>
