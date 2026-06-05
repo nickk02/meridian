@@ -23,6 +23,8 @@ export interface Env {
   DB?: D1Database;
   CACHE?: KVNamespace;
   RAW?: R2Bucket;
+  VEC?: VectorizeIndex;
+  AI?: Ai;
   // Shared secret guarding manual ingestion. Unset disables the manual route.
   INGEST_TOKEN?: string;
 }

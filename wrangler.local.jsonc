@@ -27,5 +27,7 @@
   "kv_namespaces": [
     { "binding": "CACHE", "id": "local-placeholder" }
   ],
-  "r2_buckets": [{ "binding": "RAW", "bucket_name": "meridian-raw" }]
+  "r2_buckets": [{ "binding": "RAW", "bucket_name": "meridian-raw" }],
+  "vectorize": [{ "binding": "VEC", "index_name": "meridian-events" }],
+  "ai": { "binding": "AI" }
 }

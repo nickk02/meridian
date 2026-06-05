@@ -43,5 +43,11 @@
 
   // Raw upstream landing zone (Stage B): cron writes raw feed JSON here, the
   // normalizer reads it back and refines into D1.
-  "r2_buckets": [{ "binding": "RAW", "bucket_name": "meridian-raw" }]
+  "r2_buckets": [{ "binding": "RAW", "bucket_name": "meridian-raw" }],
+
+  // Semantic correlation (Stage E): event-text embeddings.
+  "vectorize": [{ "binding": "VEC", "index_name": "meridian-events" }],
+
+  // Workers AI: bge embeddings for Vectorize and grounded summaries later.
+  "ai": { "binding": "AI" }
 }
