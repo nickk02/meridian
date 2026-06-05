@@ -98,16 +98,24 @@ function objectsGeo(objs: OntologyObject[]): FeatureCollection {
   };
 }
 
+// Types that move between link rebuilds. A CO_LOCATED link (capped at 400km) to
+// an aircraft or vessel goes stale as the object flies/sails away, leaving a
+// stray line stretched across the map until the hourly rebuild. Suppress those.
+const MOVING = new Set(["AIRCRAFT", "VESSEL"]);
+
 function linksGeo(
   links: OntologyLink[],
   byId: Map<string, OntologyObject>,
   visible: (o: OntologyObject) => boolean,
+  selectedId: string | null,
 ): FeatureCollection {
   const features: Feature[] = [];
   for (const l of links) {
     const s = byId.get(l.source_id);
     const t = byId.get(l.target_id);
     if (!s || !t || !visible(s) || !visible(t)) continue;
+    if (l.kind === "CO_LOCATED" && (MOVING.has(s.type) || MOVING.has(t.type))) continue;
+    const sel = selectedId != null && (l.source_id === selectedId || l.target_id === selectedId);
     features.push({
       type: "Feature",
       geometry: {
@@ -117,7 +125,7 @@ function linksGeo(
           [t.lon, t.lat],
         ],
       },
-      properties: { kind: l.kind },
+      properties: { kind: l.kind, sel: sel ? 1 : 0 },
     });
   }
   return { type: "FeatureCollection", features };
@@ -183,22 +191,22 @@ export function MapView(props: Props) {
       map.addSource("objects", { type: "geojson", data: emptyFc() });
       map.addSource("selected", { type: "geojson", data: emptyFc() });
 
+      // Links are dim by default and only light up for the selected object, so
+      // the web reads as quiet context until you ask a question of it (cartography
+      // Stage 1). A selected link also thickens and takes a brighter color.
       map.addLayer({
         id: "links",
         type: "line",
         source: "links",
         paint: {
           "line-color": [
-            "match",
-            ["get", "kind"],
-            "PROXIMATE_TO",
-            "#1b8a96",
-            "CO_LOCATED",
-            "#9a7320",
-            "#444",
+            "case",
+            ["==", ["get", "sel"], 1],
+            ["match", ["get", "kind"], "PROXIMATE_TO", "#5fe6f2", "CO_LOCATED", "#f5b945", "#9aa6b6"],
+            ["match", ["get", "kind"], "PROXIMATE_TO", "#1b8a96", "CO_LOCATED", "#9a7320", "#444"],
           ] as ExpressionSpecification,
-          "line-width": 0.6,
-          "line-opacity": 0.35,
+          "line-width": ["case", ["==", ["get", "sel"], 1], 1.6, 0.5] as ExpressionSpecification,
+          "line-opacity": ["case", ["==", ["get", "sel"], 1], 0.9, 0.08] as ExpressionSpecification,
         },
       });
 
@@ -305,7 +313,7 @@ export function MapView(props: Props) {
 
     (map.getSource("objects") as GeoJSONSource | undefined)?.setData(objectsGeo(shown));
     (map.getSource("links") as GeoJSONSource | undefined)?.setData(
-      linksGeo(links, byId, visible),
+      linksGeo(links, byId, visible, selectedId),
     );
     const sel = selectedId ? byId.get(selectedId) : undefined;
     (map.getSource("selected") as GeoJSONSource | undefined)?.setData(
