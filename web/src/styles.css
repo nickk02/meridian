@@ -238,9 +238,46 @@ body,
   position: relative;
 }
 
+.mer-map-wrap {
+  position: absolute;
+  inset: 0;
+}
 .mer-map {
   position: absolute;
   inset: 0;
+}
+
+/* Projection toggle, top-left over the map. */
+.mer-proj-toggle {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: flex;
+  border: 1px solid var(--mer-border);
+  background: rgba(8, 11, 18, 0.82);
+  backdrop-filter: blur(4px);
+}
+.mer-proj-btn {
+  font-family: var(--mer-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: var(--mer-text-dim);
+  background: transparent;
+  border: none;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.mer-proj-btn + .mer-proj-btn {
+  border-left: 1px solid var(--mer-border);
+}
+.mer-proj-btn:hover {
+  color: var(--mer-text);
+}
+.mer-proj-btn.on {
+  color: var(--mer-bg);
+  background: var(--mer-cyan);
 }
 
 /* Dark, square MapLibre chrome to match the console. */

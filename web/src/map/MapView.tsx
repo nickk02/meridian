@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import type {
   GeoJSONSource,
@@ -6,6 +6,7 @@ import type {
   ExpressionSpecification,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { FeatureCollection, Feature } from "geojson";
 import type { OntologyObject, OntologyLink } from "../../../shared/types";
 import { darkBasemap } from "./style";
 
@@ -71,7 +72,7 @@ const GLOW_RADIUS: ExpressionSpecification = [
   ["interpolate", ["linear"], ["get", "severity"], 1, 12, 4, 28],
 ];
 
-function objectsGeo(objs: OntologyObject[]): GeoJSON.FeatureCollection {
+function objectsGeo(objs: OntologyObject[]): FeatureCollection {
   return {
     type: "FeatureCollection",
     features: objs.map((o) => ({
@@ -92,8 +93,8 @@ function linksGeo(
   links: OntologyLink[],
   byId: Map<string, OntologyObject>,
   visible: (o: OntologyObject) => boolean,
-): GeoJSON.FeatureCollection {
-  const features: GeoJSON.Feature[] = [];
+): FeatureCollection {
+  const features: Feature[] = [];
   for (const l of links) {
     const s = byId.get(l.source_id);
     const t = byId.get(l.target_id);
@@ -113,21 +114,43 @@ function linksGeo(
   return { type: "FeatureCollection", features };
 }
 
+// Thin atmospheric halo + dark space, applied only on the globe. The horizon
+// glow is the project cyan so the planet reads as part of the console, not a
+// stock blue marble.
+function applyGlobeSky(map: maplibregl.Map) {
+  map.setSky({
+    "sky-color": "#05070d",
+    "horizon-color": "#0d2730",
+    "fog-color": "#0a141c",
+    "sky-horizon-blend": 0.6,
+    "horizon-fog-blend": 0.7,
+    "fog-ground-blend": 0.4,
+    "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 0.85, 4, 0.3, 6, 0],
+  });
+}
+
 export function MapView(props: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const readyRef = useRef(false);
   const onSelectRef = useRef(props.onSelect);
   onSelectRef.current = props.onSelect;
+  // Globe is the default framing for the world view; operators can drop to a
+  // flat Mercator for analysis work. Persist the choice across tab switches.
+  const [globe, setGlobe] = useState(true);
+  const globeRef = useRef(globe);
+  globeRef.current = globe;
 
   // Init once.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    const startGlobe = globeRef.current;
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: darkBasemap,
       center: [12, 28],
-      zoom: 1.35,
+      // Start pulled back into space for the fly-in; flat view opens framed.
+      zoom: startGlobe ? 0.2 : 1.35,
       attributionControl: { compact: true },
     });
     mapRef.current = map;
@@ -136,6 +159,17 @@ export function MapView(props: Props) {
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
 
     map.on("load", () => {
+      if (startGlobe) {
+        map.setProjection({ type: "globe" });
+        applyGlobeSky(map);
+        // Fly-in: ease up from deep space to a framed globe with a slow drift.
+        map.easeTo({
+          zoom: 1.6,
+          bearing: -18,
+          duration: 4200,
+          easing: (t) => 1 - Math.pow(1 - t, 3),
+        });
+      }
       map.addSource("links", { type: "geojson", data: emptyFc() });
       map.addSource("objects", { type: "geojson", data: emptyFc() });
       map.addSource("selected", { type: "geojson", data: emptyFc() });
@@ -269,9 +303,44 @@ export function MapView(props: Props) {
 
   useEffect(syncData);
 
-  return <div ref={containerRef} className="mer-map" />;
+  // Toggle projection after init. Switching to globe re-applies the sky and
+  // flies in; switching to flat eases the bearing back to north.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+    if (globe) {
+      map.setProjection({ type: "globe" });
+      applyGlobeSky(map);
+      map.easeTo({ zoom: Math.max(map.getZoom(), 1.6), bearing: -18, duration: 1600 });
+    } else {
+      map.setProjection({ type: "mercator" });
+      map.easeTo({ bearing: 0, pitch: 0, duration: 800 });
+    }
+  }, [globe]);
+
+  return (
+    <div className="mer-map-wrap">
+      <div ref={containerRef} className="mer-map" />
+      <div className="mer-proj-toggle" role="group" aria-label="Map projection">
+        <button
+          className={`mer-proj-btn ${globe ? "on" : ""}`}
+          onClick={() => setGlobe(true)}
+          aria-pressed={globe}
+        >
+          GLOBE
+        </button>
+        <button
+          className={`mer-proj-btn ${!globe ? "on" : ""}`}
+          onClick={() => setGlobe(false)}
+          aria-pressed={!globe}
+        >
+          FLAT
+        </button>
+      </div>
+    </div>
+  );
 }
 
-function emptyFc(): GeoJSON.FeatureCollection {
+function emptyFc(): FeatureCollection {
   return { type: "FeatureCollection", features: [] };
 }
