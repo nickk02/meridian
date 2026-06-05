@@ -291,23 +291,6 @@ export function MapView(props: Props) {
           );
         }
       }
-      // Soft halo behind each sat so the orbital shell reads against space.
-      if (onGlobe) {
-        layers.push(
-          new ScatterplotLayer<SatPoint>({
-            id: "sat-glow",
-            data: satPointsRef.current,
-            getPosition: (d) => [d.lon, d.lat, d.altKm * 1000 * altScale],
-            getRadius: 5,
-            radiusUnits: "pixels",
-            radiusMinPixels: 3,
-            getFillColor: [150, 220, 255, 45],
-            stroked: false,
-            pickable: false,
-            parameters: { depthCompare: "less-equal", depthWriteEnabled: false },
-          }),
-        );
-      }
       // The satellite glyph, billboarded (always faces the camera) at true
       // orbital altitude. A mask icon tinted at runtime, so it reads as a
       // satellite, not a bare dot. Falls back to a dot until the image loads.
@@ -320,10 +303,10 @@ export function MapView(props: Props) {
             getIcon: () => "sat",
             iconAtlas: satIconRef.current,
             iconMapping: { sat: { x: 0, y: 0, width: 64, height: 64, anchorX: 32, anchorY: 32, mask: true } },
-            getSize: 15,
+            getSize: 22,
             sizeUnits: "pixels",
-            sizeMinPixels: 9,
-            getColor: [234, 246, 255, 245],
+            sizeMinPixels: 14,
+            getColor: [226, 242, 255, 255],
             billboard: true,
             pickable: false,
             parameters: { depthCompare: "less-equal" },
