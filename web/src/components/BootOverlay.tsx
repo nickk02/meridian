@@ -12,7 +12,7 @@ export function BootOverlay() {
     <div className="mer-boot">
       <div style={{ textAlign: "center" }}>
         <div className="mer-boot-mark">MERIDIAN</div>
-        <div className="mer-boot-sub">COMMON OPERATING PICTURE</div>
+        <div className="mer-boot-sub">Connecting the world's events in real time.</div>
       </div>
       <div className="mer-boot-lines">
         {LINES.map((l, i) => (
