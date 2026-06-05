@@ -21,3 +21,11 @@ AGENTS.md
 
 # local scratch downloads
 .local-scratch/
+
+# local scratch (screenshots, probes) kept out of the repo
+/globe-*.png
+/fixes-*.png
+/shot-*.mjs
+/verify-*.mjs
+/poll-*.mjs
+/*.tmp.json
