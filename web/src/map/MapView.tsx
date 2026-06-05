@@ -923,7 +923,7 @@ export function MapView(props: Props) {
           FLAT
         </button>
         <button className="mer-proj-btn mer-proj-reset" onClick={resetView}>
-          RESET VIEW
+          RESET<span className="mer-proj-view"> VIEW</span>
         </button>
       </div>
     </div>
