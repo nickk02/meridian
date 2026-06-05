@@ -59,6 +59,35 @@ app.get("/api/types", async (c) => {
   return c.json(await listObjectTypes(d));
 });
 
+// TLE proxy for the satellite layer: fetch a curated set of orbital elements
+// from CelesTrak, cache in KV (TLEs change ~daily; the client propagates live
+// positions), and serve as text. Proxying handles CORS and shields CelesTrak
+// from per-client load.
+app.get("/api/tle", async (c) => {
+  const cache = c.env.CACHE;
+  const KEY = "tle:v1";
+  if (cache) {
+    const hit = await cache.get(KEY);
+    if (hit) return c.text(hit);
+  }
+  const groups = ["stations", "gps-ops", "visual"];
+  try {
+    const parts = await Promise.all(
+      groups.map((g) =>
+        fetch(`https://celestrak.org/NORAD/elements/gp.php?GROUP=${g}&FORMAT=tle`, {
+          headers: { "user-agent": "meridian-cop (github.com/nickk02/meridian)" },
+        }).then((r) => (r.ok ? r.text() : "")),
+      ),
+    );
+    const body = parts.join("\n").replace(/\r/g, "").trim();
+    if (!body) return c.text("", 502);
+    if (cache) await cache.put(KEY, body, { expirationTtl: 3600 });
+    return c.text(body);
+  } catch {
+    return c.text("", 502);
+  }
+});
+
 app.get("/api/objects", async (c) => {
   const d = db(c);
   if (!d) return c.json(NO_DB, 503);

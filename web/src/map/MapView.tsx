@@ -10,6 +10,7 @@ import type { FeatureCollection, Feature } from "geojson";
 import type { OntologyObject, OntologyLink } from "../../../shared/types";
 import { isValidCoord } from "../../../shared/coords";
 import { darkBasemap } from "./style";
+import { fetchSats, propagateSats, type Sat } from "./satellites";
 
 interface Props {
   objects: OntologyObject[];
@@ -157,6 +158,8 @@ export function MapView(props: Props) {
   const [globe, setGlobe] = useState(true);
   const globeRef = useRef(globe);
   globeRef.current = globe;
+  const [satsOn, setSatsOn] = useState(true);
+  const satsRef = useRef<Sat[]>([]);
 
   // Init once.
   useEffect(() => {
@@ -300,6 +303,31 @@ export function MapView(props: Props) {
         },
       });
 
+      // Satellites: live sub-satellite points, propagated client-side and
+      // updated on an interval. A faint trailing glow plus a small bright core.
+      map.addSource("sats", { type: "geojson", data: emptyFc() });
+      map.addLayer({
+        id: "sats-glow",
+        type: "circle",
+        source: "sats",
+        paint: {
+          "circle-color": "#a9e6ff",
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 3.5, 6, 6] as ExpressionSpecification,
+          "circle-blur": 1,
+          "circle-opacity": 0.25,
+        },
+      });
+      map.addLayer({
+        id: "sats",
+        type: "circle",
+        source: "sats",
+        paint: {
+          "circle-color": "#eaf6ff",
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 1.3, 6, 2.6] as ExpressionSpecification,
+          "circle-opacity": 0.95,
+        },
+      });
+
       map.on("click", "objects", (e) => {
         const f = e.features?.[0] as MapGeoJSONFeature | undefined;
         const id = f?.properties?.["id"];
@@ -349,6 +377,44 @@ export function MapView(props: Props) {
 
   useEffect(syncData);
 
+  // Load TLEs once on mount, refresh hourly. Stored in a ref so the animation
+  // loop reads the latest without re-subscribing.
+  useEffect(() => {
+    let alive = true;
+    const load = () => fetchSats().then((s) => { if (alive) satsRef.current = s; });
+    load();
+    const id = window.setInterval(load, 3600_000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  // Animate sub-satellite points (propagate to "now" every 2s) and toggle the
+  // layer visibility with satsOn.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const vis = satsOn ? "visible" : "none";
+    const apply = () => {
+      if (!map.getLayer("sats")) return;
+      map.setLayoutProperty("sats", "visibility", vis);
+      map.setLayoutProperty("sats-glow", "visibility", vis);
+    };
+    if (readyRef.current) apply();
+    else map.once("load", apply);
+    if (!satsOn) return;
+    const tick = () => {
+      if (!readyRef.current || satsRef.current.length === 0) return;
+      (map.getSource("sats") as GeoJSONSource | undefined)?.setData(
+        propagateSats(satsRef.current, new Date()),
+      );
+    };
+    tick();
+    const id = window.setInterval(tick, 2000);
+    return () => window.clearInterval(id);
+  }, [satsOn]);
+
   // Toggle projection after init. Either way the camera returns upright
   // (bearing 0, pitch 0) so the poles stay vertical.
   useEffect(() => {
@@ -397,6 +463,13 @@ export function MapView(props: Props) {
         </button>
         <button className="mer-proj-btn mer-proj-reset" onClick={resetView}>
           RESET VIEW
+        </button>
+        <button
+          className={`mer-proj-btn ${satsOn ? "on" : ""}`}
+          onClick={() => setSatsOn((v) => !v)}
+          aria-pressed={satsOn}
+        >
+          SATS
         </button>
       </div>
     </div>
