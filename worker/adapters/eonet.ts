@@ -88,8 +88,10 @@ export function normalizeEonet(feed: EonetFeed): IngestObject[] {
 
 export const eonetAdapter = {
   source: "eonet",
-  async fetch(cache: KVNamespace | undefined): Promise<IngestObject[]> {
-    const feed = await cachedFetchJson<EonetFeed>(cache, CACHE_KEY, URL, 600);
-    return normalizeEonet(feed);
+  fetchRaw(cache: KVNamespace | undefined): Promise<unknown> {
+    return cachedFetchJson<EonetFeed>(cache, CACHE_KEY, URL, 600);
+  },
+  normalize(raw: unknown): IngestObject[] {
+    return normalizeEonet(raw as EonetFeed);
   },
 };

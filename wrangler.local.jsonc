@@ -26,5 +26,6 @@
   ],
   "kv_namespaces": [
     { "binding": "CACHE", "id": "local-placeholder" }
-  ]
+  ],
+  "r2_buckets": [{ "binding": "RAW", "bucket_name": "meridian-raw" }]
 }

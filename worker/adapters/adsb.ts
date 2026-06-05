@@ -58,8 +58,10 @@ export function normalizeAdsb(resp: AdsbResp, now: number): IngestObject[] {
 
 export const adsbAdapter = {
   source: "airplanes",
-  async fetch(cache: KVNamespace | undefined): Promise<IngestObject[]> {
-    const resp = await cachedFetchJson<AdsbResp>(cache, "feed:airplanes", URL, 60);
-    return normalizeAdsb(resp, Date.now());
+  fetchRaw(cache: KVNamespace | undefined): Promise<unknown> {
+    return cachedFetchJson<AdsbResp>(cache, "feed:airplanes", URL, 60);
+  },
+  normalize(raw: unknown): IngestObject[] {
+    return normalizeAdsb(raw as AdsbResp, Date.now());
   },
 };

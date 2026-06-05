@@ -39,5 +39,9 @@
   // Short-TTL feed cache.
   "kv_namespaces": [
     { "binding": "CACHE", "id": "9f7b204879034bc8bb38c50b58444697" }
-  ]
+  ],
+
+  // Raw upstream landing zone (Stage B): cron writes raw feed JSON here, the
+  // normalizer reads it back and refines into D1.
+  "r2_buckets": [{ "binding": "RAW", "bucket_name": "meridian-raw" }]
 }

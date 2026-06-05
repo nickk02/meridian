@@ -75,8 +75,10 @@ export function normalizeGdacs(feed: GdacsFeed): IngestObject[] {
 
 export const gdacsAdapter = {
   source: "gdacs",
-  async fetch(cache: KVNamespace | undefined): Promise<IngestObject[]> {
-    const feed = await cachedFetchJson<GdacsFeed>(cache, "feed:gdacs", URL, 900);
-    return normalizeGdacs(feed);
+  fetchRaw(cache: KVNamespace | undefined): Promise<unknown> {
+    return cachedFetchJson<GdacsFeed>(cache, "feed:gdacs", URL, 900);
+  },
+  normalize(raw: unknown): IngestObject[] {
+    return normalizeGdacs(raw as GdacsFeed);
   },
 };

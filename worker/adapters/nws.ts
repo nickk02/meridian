@@ -87,8 +87,10 @@ export function normalizeNws(feed: NwsFeed): IngestObject[] {
 
 export const nwsAdapter = {
   source: "nws",
-  async fetch(cache: KVNamespace | undefined): Promise<IngestObject[]> {
-    const feed = await cachedFetchJson<NwsFeed>(cache, "feed:nws", URL, 300);
-    return normalizeNws(feed);
+  fetchRaw(cache: KVNamespace | undefined): Promise<unknown> {
+    return cachedFetchJson<NwsFeed>(cache, "feed:nws", URL, 300);
+  },
+  normalize(raw: unknown): IngestObject[] {
+    return normalizeNws(raw as NwsFeed);
   },
 };

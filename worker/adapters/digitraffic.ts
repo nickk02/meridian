@@ -63,10 +63,12 @@ export function normalizeDigitraffic(feed: AisFeed, now: number): IngestObject[]
 
 export const digitrafficAdapter = {
   source: "digitraffic",
-  async fetch(cache: KVNamespace | undefined): Promise<IngestObject[]> {
-    const feed = await cachedFetchJson<AisFeed>(cache, "feed:digitraffic", URL, 120, {
+  fetchRaw(cache: KVNamespace | undefined): Promise<unknown> {
+    return cachedFetchJson<AisFeed>(cache, "feed:digitraffic", URL, 120, {
       headers: { "Digitraffic-User": "meridian-cop", "Accept-Encoding": "gzip" },
     });
-    return normalizeDigitraffic(feed, Date.now());
+  },
+  normalize(raw: unknown): IngestObject[] {
+    return normalizeDigitraffic(raw as AisFeed, Date.now());
   },
 };

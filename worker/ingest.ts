@@ -50,7 +50,7 @@ const FAST_PRUNE_MS = 60 * 60 * 1000;
 
 export interface IngestResult {
   ran: number;
-  sources: { source: string; count: number }[];
+  sources: { source: string; count: number; stale?: boolean }[];
   errors: { source: string; error: string }[];
   upserted: number;
   pruned: number;
@@ -103,9 +103,20 @@ async function upsertObjects(
   }
 }
 
+// R2 key for a source's raw blob at a given time: raw/{source}/{yyyy}/{mm}/{dd}/{hhmm}.json
+function rawKey(source: string, ts: number): string {
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `raw/${source}/${d.getUTCFullYear()}/${p(d.getUTCMonth() + 1)}/` +
+    `${p(d.getUTCDate())}/${p(d.getUTCHours())}${p(d.getUTCMinutes())}.json`
+  );
+}
+
 export async function runIngest(
   db: D1Database,
   cache: KVNamespace | undefined,
+  raw: R2Bucket | undefined,
   opts: { forceLinks?: boolean } = {},
 ): Promise<IngestResult> {
   const ran = Date.now();
@@ -115,10 +126,36 @@ export async function runIngest(
 
   for (const adapter of ADAPTERS) {
     try {
-      const items = await adapter.fetch(cache);
+      // Fetch upstream, archive the raw blob to R2 (timestamped + latest), then
+      // normalize from the archived blob so refinement is decoupled from fetch.
+      const upstream = await adapter.fetchRaw(cache);
+      let payload: unknown = upstream;
+      if (raw) {
+        const body = JSON.stringify(upstream);
+        await raw.put(rawKey(adapter.source, ran), body);
+        await raw.put(`raw/${adapter.source}/latest.json`, body);
+        const stored = await raw.get(`raw/${adapter.source}/latest.json`);
+        if (stored) payload = JSON.parse(await stored.text());
+      }
+      const items = adapter.normalize(payload);
       collected.push(...items);
       sources.push({ source: adapter.source, count: items.length });
     } catch (e) {
+      // Fail soft: if the upstream is down, re-normalize the last archived blob
+      // so a transient outage does not drop the layer (the R2 tier's payoff).
+      if (raw) {
+        try {
+          const stored = await raw.get(`raw/${adapter.source}/latest.json`);
+          if (stored) {
+            const items = adapter.normalize(JSON.parse(await stored.text()));
+            collected.push(...items);
+            sources.push({ source: adapter.source, count: items.length, stale: true });
+            continue;
+          }
+        } catch {
+          /* fall through to error */
+        }
+      }
       errors.push({ source: adapter.source, error: String(e) });
     }
   }

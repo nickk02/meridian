@@ -49,9 +49,11 @@ export function normalizeLaunches(resp: LaunchResp): IngestObject[] {
 
 export const launchAdapter = {
   source: "launchlibrary",
-  async fetch(cache: KVNamespace | undefined): Promise<IngestObject[]> {
+  fetchRaw(cache: KVNamespace | undefined): Promise<unknown> {
     // Cache 6h: the upstream is rate-limited and the upcoming list changes slowly.
-    const resp = await cachedFetchJson<LaunchResp>(cache, "feed:launch", URL, 21600);
-    return normalizeLaunches(resp);
+    return cachedFetchJson<LaunchResp>(cache, "feed:launch", URL, 21600);
+  },
+  normalize(raw: unknown): IngestObject[] {
+    return normalizeLaunches(raw as LaunchResp);
   },
 };

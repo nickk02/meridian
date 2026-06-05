@@ -63,8 +63,10 @@ export function normalizeNhc(feed: NhcFeed): IngestObject[] {
 
 export const nhcAdapter = {
   source: "nhc",
-  async fetch(cache: KVNamespace | undefined): Promise<IngestObject[]> {
-    const feed = await cachedFetchJson<NhcFeed>(cache, "feed:nhc", URL, 1800);
-    return normalizeNhc(feed);
+  fetchRaw(cache: KVNamespace | undefined): Promise<unknown> {
+    return cachedFetchJson<NhcFeed>(cache, "feed:nhc", URL, 1800);
+  },
+  normalize(raw: unknown): IngestObject[] {
+    return normalizeNhc(raw as NhcFeed);
   },
 };

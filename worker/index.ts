@@ -19,6 +19,7 @@ export interface Env {
   // bound. Data routes return 503 until DB exists.
   DB?: D1Database;
   CACHE?: KVNamespace;
+  RAW?: R2Bucket;
   // Shared secret guarding manual ingestion. Unset disables the manual route.
   INGEST_TOKEN?: string;
 }
@@ -124,8 +125,22 @@ app.post("/api/ingest/run", async (c) => {
   if (!d) return c.json(NO_DB, 503);
   // Defaults to forcing a link rebuild; pass ?force=0 to exercise the cron gate.
   const forceLinks = c.req.query("force") !== "0";
-  const result = await runIngest(d, c.env.CACHE, { forceLinks });
+  const result = await runIngest(d, c.env.CACHE, c.env.RAW, { forceLinks });
   return c.json(result);
+});
+
+// Guarded: confirm a source's latest raw blob exists in R2 (Stage B gate).
+app.get("/api/raw/:source", async (c) => {
+  const token = c.env.INGEST_TOKEN;
+  if (!token || c.req.header("authorization") !== `Bearer ${token}`) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  if (!c.env.RAW) return c.json({ error: "R2 not bound" }, 503);
+  const key = `raw/${c.req.param("source")}/latest.json`;
+  const obj = await c.env.RAW.get(key);
+  if (!obj) return c.json({ error: "no blob", key }, 404);
+  const text = await obj.text();
+  return c.json({ key, bytes: text.length, uploaded: obj.uploaded });
 });
 
 // Unknown API routes return JSON, never the SPA shell.
@@ -144,6 +159,6 @@ export default {
     ctx: ExecutionContext,
   ): Promise<void> {
     if (!env.DB) return;
-    ctx.waitUntil(runIngest(env.DB, env.CACHE).then(() => undefined));
+    ctx.waitUntil(runIngest(env.DB, env.CACHE, env.RAW).then(() => undefined));
   },
 };

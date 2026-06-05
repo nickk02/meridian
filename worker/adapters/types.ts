@@ -17,7 +17,11 @@ export interface IngestObject {
   props: Record<string, unknown>;
 }
 
+// Stage B split: fetchRaw pulls upstream JSON (cached in KV), normalize is a
+// pure function from raw payload to typed objects. Ingestion writes the raw to
+// R2 between the two, so normalization runs against the archived blob.
 export interface Adapter {
   source: string;
-  fetch(cache: KVNamespace | undefined): Promise<IngestObject[]>;
+  fetchRaw(cache: KVNamespace | undefined): Promise<unknown>;
+  normalize(raw: unknown): IngestObject[];
 }

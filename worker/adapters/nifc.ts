@@ -83,8 +83,10 @@ export function normalizeNifc(feed: NifcFeed): IngestObject[] {
 
 export const nifcAdapter = {
   source: "nifc",
-  async fetch(cache: KVNamespace | undefined): Promise<IngestObject[]> {
-    const feed = await cachedFetchJson<NifcFeed>(cache, "feed:nifc", URL, 21600);
-    return normalizeNifc(feed);
+  fetchRaw(cache: KVNamespace | undefined): Promise<unknown> {
+    return cachedFetchJson<NifcFeed>(cache, "feed:nifc", URL, 21600);
+  },
+  normalize(raw: unknown): IngestObject[] {
+    return normalizeNifc(raw as NifcFeed);
   },
 };

@@ -49,8 +49,10 @@ export function normalizeUsgs(feed: UsgsFeed): IngestObject[] {
 
 export const usgsAdapter = {
   source: "usgs",
-  async fetch(cache: KVNamespace | undefined): Promise<IngestObject[]> {
-    const feed = await cachedFetchJson<UsgsFeed>(cache, "feed:usgs", URL, 300);
-    return normalizeUsgs(feed);
+  fetchRaw(cache: KVNamespace | undefined): Promise<unknown> {
+    return cachedFetchJson<UsgsFeed>(cache, "feed:usgs", URL, 300);
+  },
+  normalize(raw: unknown): IngestObject[] {
+    return normalizeUsgs(raw as UsgsFeed);
   },
 };

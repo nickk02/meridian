@@ -65,13 +65,15 @@ export function normalizeFireballs(resp: FireballResp): IngestObject[] {
 
 export const cneosAdapter = {
   source: "cneos",
-  async fetch(cache: KVNamespace | undefined): Promise<IngestObject[]> {
+  fetchRaw(cache: KVNamespace | undefined): Promise<unknown> {
     // Bound to roughly the last three years of located events.
     const since = new Date(Date.now() - 3 * 365 * 86400000)
       .toISOString()
       .slice(0, 10);
     const url = `${BASE}&date-min=${since}`;
-    const resp = await cachedFetchJson<FireballResp>(cache, "feed:cneos", url, 43200);
-    return normalizeFireballs(resp);
+    return cachedFetchJson<FireballResp>(cache, "feed:cneos", url, 43200);
+  },
+  normalize(raw: unknown): IngestObject[] {
+    return normalizeFireballs(raw as FireballResp);
   },
 };
