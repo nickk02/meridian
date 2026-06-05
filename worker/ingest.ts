@@ -3,6 +3,7 @@
 
 import type { IngestObject } from "./adapters/types";
 import type { Domain } from "../shared/types";
+import { isValidCoord } from "../shared/coords";
 import { usgsAdapter } from "./adapters/usgs";
 import { eonetAdapter } from "./adapters/eonet";
 import { gdacsAdapter } from "./adapters/gdacs";
@@ -112,6 +113,7 @@ export interface IngestResult {
   sources: { source: string; count: number; stale?: boolean }[];
   errors: { source: string; error: string }[];
   upserted: number;
+  droppedCoords: number; // objects rejected at the door for bad/null coordinates
   pruned: number;
   links: number; // -1 when the link rebuild was skipped this cycle
   entities: number;
@@ -229,17 +231,23 @@ export async function runIngest(
     }
   }
 
+  // Reject bad/null coordinates at the door, before anything (admin0, upsert,
+  // links, correlation, entities) can act on them. One validator, one place;
+  // the rest of the system can assume every stored object is coordinate-clean.
+  const clean = collected.filter((o) => isValidCoord(o.lat, o.lon));
+  const droppedCoords = collected.length - clean.length;
+
   // Backfill admin0 from coordinates for land events the feed did not tag, so
   // every land event resolves to its country entity.
-  for (const o of collected) {
+  for (const o of clean) {
     if (!o.admin0) {
       const iso3 = countryAt(o.lat, o.lon);
       if (iso3) o.admin0 = iso3;
     }
   }
 
-  await upsertObjects(db, collected, ran);
-  const ents = await resolveEntities(db, collected, ran);
+  await upsertObjects(db, clean, ran);
+  const ents = await resolveEntities(db, clean, ran);
 
   // Drop dynamic objects not refreshed recently; anchors are permanent.
   const prune = await db
@@ -277,7 +285,8 @@ export async function runIngest(
     ran,
     sources,
     errors,
-    upserted: collected.length,
+    upserted: clean.length,
+    droppedCoords,
     pruned,
     links,
     entities: ents.entities,

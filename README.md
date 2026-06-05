@@ -136,7 +136,7 @@ Security findings are taken seriously and fixed before new features ship. See [S
 
 ## Contributing
 
-Contributions are welcome. Because Meridian is offered under a dual license (see below), external contributions require a Contributor License Agreement before they can be merged, so the project retains the right to offer commercial licenses. A CONTRIBUTING guide and CLA will be published before external contributions are accepted; until then, please open an issue to discuss a change.
+Contributions are welcome. Because Meridian is offered under a dual license (see below), external contributions require a Contributor License Agreement before they can be merged, so the project retains the right to offer commercial licenses. See [CONTRIBUTING.md](CONTRIBUTING.md) for the process and [CLA.md](CLA.md) for the agreement.
 
 ## License
 

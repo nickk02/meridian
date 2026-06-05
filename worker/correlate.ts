@@ -28,6 +28,12 @@ interface EvtPt {
   severity: number;
 }
 
+// The clustering method's identity, used BOTH as the algorithm's name and as the
+// link basis token, so the persisted basis can never drift from the method that
+// actually produced it. Change the algorithm, change this, and the provenance
+// follows automatically.
+const CLUSTER_METHOD = "anchor-proximity";
+
 interface TypeParam {
   epsKm: number;
   epsHr: number;
@@ -181,7 +187,7 @@ export async function correlate(
           `CORRELATED_WITH|${mid}|${inc.anchorId}`,
           mid,
           inc.anchorId,
-          `spatiotemporal:stdbscan type=${a.type}`,
+          `spatiotemporal:${CLUSTER_METHOD} type=${a.type}`,
           JSON.stringify({ km: round(km, 1), hours: round(dtHr, 1), incident: inc.id }),
           conf,
           now,

@@ -8,6 +8,7 @@ import type {
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { FeatureCollection, Feature } from "geojson";
 import type { OntologyObject, OntologyLink } from "../../../shared/types";
+import { isValidCoord } from "../../../shared/coords";
 import { darkBasemap } from "./style";
 
 interface Props {
@@ -25,18 +26,9 @@ const ANCHOR = new Set(["PORT", "CHOKEPOINT", "AIRPORT"]);
 // fly-in target and the Reset View control return here.
 const HOME = { center: [12, 28] as [number, number], zoom: 1.6, bearing: 0, pitch: 0 };
 
-// Reject objects with bad/null coordinates so they never reach the map. Null
-// Island (0,0) is effectively always bad upstream data, and a link with one
-// endpoint there draws a stray line across the globe.
-function validCoord(o: { lat: number; lon: number }): boolean {
-  return (
-    Number.isFinite(o.lat) &&
-    Number.isFinite(o.lon) &&
-    Math.abs(o.lat) <= 90 &&
-    Math.abs(o.lon) <= 180 &&
-    !(o.lat === 0 && o.lon === 0)
-  );
-}
+// Bad coordinates are rejected at ingest (shared/coords), so this client filter
+// is defense in depth: it keeps a stray endpoint off the map if anything ever
+// slips past the door.
 
 // Severity ramp for dynamic events; anchors keep their infrastructure colors.
 const COLOR: ExpressionSpecification = [
@@ -305,7 +297,7 @@ export function MapView(props: Props) {
     const { objects, links, visibleTypes, severityMin, selectedId } = props;
     // Drop bad-coordinate objects up front so neither dots nor links can render
     // to Null Island; links to a dropped object are skipped (endpoint missing).
-    const objs = objects.filter(validCoord);
+    const objs = objects.filter((o) => isValidCoord(o.lat, o.lon));
     const visible = (o: OntologyObject) =>
       visibleTypes.has(o.type) && o.severity >= severityMin;
     const shown = objs.filter(visible);
@@ -331,10 +323,17 @@ export function MapView(props: Props) {
     if (globe) {
       map.setProjection({ type: "globe" });
       applyGlobeSky(map);
-      map.easeTo({ zoom: Math.max(map.getZoom(), 1.6), bearing: 0, pitch: 0, duration: 1600 });
+      // Stay where the operator is (don't yank zoom), but restore HOME's upright
+      // bearing/pitch so the poles are vertical. HOME is the single source.
+      map.easeTo({
+        zoom: Math.max(map.getZoom(), HOME.zoom),
+        bearing: HOME.bearing,
+        pitch: HOME.pitch,
+        duration: 1600,
+      });
     } else {
       map.setProjection({ type: "mercator" });
-      map.easeTo({ bearing: 0, pitch: 0, duration: 800 });
+      map.easeTo({ bearing: HOME.bearing, pitch: HOME.pitch, duration: 800 });
     }
   }, [globe]);
 

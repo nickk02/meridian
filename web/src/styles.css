@@ -347,6 +347,15 @@ body,
   margin-bottom: 6px;
 }
 
+/* Collapsible category headers in the layer rail. */
+.mer-cat-label {
+  font-family: var(--mer-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--mer-text-dim);
+}
+
 .mer-layer-row {
   display: inline-flex;
   align-items: center;
