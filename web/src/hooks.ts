@@ -35,6 +35,51 @@ export interface Ontology {
   refresh: () => void;
 }
 
+export interface ObjectDetail {
+  object: OntologyObject;
+  neighbors: { object: OntologyObject; link: OntologyLink }[];
+  state: { watch: number; flag: number };
+  annotations: { id: number; object_id: string; text: string; actor: string; ts: number }[];
+}
+
+// Fetches full detail for the selected object and exposes a refresh, used after
+// an audited action so the inspector reflects the new state immediately.
+export function useObjectDetail(id: string | null): {
+  detail: ObjectDetail | null;
+  loading: boolean;
+  refresh: () => void;
+} {
+  const [detail, setDetail] = useState<ObjectDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+  const alive = useRef(true);
+
+  const refresh = useCallback(async () => {
+    if (!id) {
+      setDetail(null);
+      return;
+    }
+    setLoading(true);
+    try {
+      const d = (await api.object(id)) as unknown as ObjectDetail;
+      if (alive.current) setDetail(d);
+    } catch {
+      if (alive.current) setDetail(null);
+    } finally {
+      if (alive.current) setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    alive.current = true;
+    refresh();
+    return () => {
+      alive.current = false;
+    };
+  }, [refresh]);
+
+  return { detail, loading, refresh };
+}
+
 // Loads types/objects/links and polls every 60s so the picture reflects a
 // fresh cron cycle. Status doubles as the API health signal.
 export function useOntology(pollMs = 60_000): Ontology {

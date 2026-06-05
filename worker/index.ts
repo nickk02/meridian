@@ -6,8 +6,12 @@ import {
   listLinks,
   getObject,
   getNeighbors,
+  getState,
+  getAnnotations,
+  listActivity,
 } from "./repo";
 import { runIngest } from "./ingest";
+import { ActionBody, applyAction } from "./actions";
 
 export interface Env {
   ASSETS: Fetcher;
@@ -66,8 +70,39 @@ app.get("/api/object/:id", async (c) => {
   const id = c.req.param("id");
   const object = await getObject(d, id);
   if (!object) return c.json({ error: "not found" }, 404);
-  const neighbors = await getNeighbors(d, id);
-  return c.json({ object, neighbors });
+  const [neighbors, state, annotations] = await Promise.all([
+    getNeighbors(d, id),
+    getState(d, id),
+    getAnnotations(d, id),
+  ]);
+  return c.json({ object, neighbors, state, annotations });
+});
+
+app.get("/api/activity", async (c) => {
+  const d = db(c);
+  if (!d) return c.json(NO_DB, 503);
+  const limit = clampLimit(c.req.query("limit"), 50, 200);
+  return c.json(await listActivity(d, limit));
+});
+
+// Audited action: write state + append to actions_log. Validated with zod.
+app.post("/api/action", async (c) => {
+  const d = db(c);
+  if (!d) return c.json(NO_DB, 503);
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid json" }, 400);
+  }
+  const parsed = ActionBody.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "invalid action", detail: parsed.error.issues }, 400);
+  }
+  const exists = await getObject(d, parsed.data.object_id);
+  if (!exists) return c.json({ error: "object not found" }, 404);
+  const result = await applyAction(d, parsed.data);
+  return c.json(result);
 });
 
 app.get("/api/links", async (c) => {

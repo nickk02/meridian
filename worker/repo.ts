@@ -5,6 +5,8 @@ import type {
   ObjectType,
   OntologyObject,
   OntologyLink,
+  ActionLogEntry,
+  Annotation,
 } from "../shared/types";
 
 function parseJson(value: unknown): Record<string, unknown> | null {
@@ -120,6 +122,48 @@ export async function listLinks(
     .bind(opts.limit)
     .all<LinkRow>();
   return results.map(mapLink);
+}
+
+export async function getState(
+  db: D1Database,
+  id: string,
+): Promise<{ watch: number; flag: number }> {
+  const { results } = await db
+    .prepare("SELECT key, value FROM state WHERE object_id = ?")
+    .bind(id)
+    .all<{ key: string; value: number }>();
+  const state = { watch: 0, flag: 0 };
+  for (const r of results) {
+    if (r.key === "watch") state.watch = r.value;
+    if (r.key === "flag") state.flag = r.value;
+  }
+  return state;
+}
+
+export async function getAnnotations(
+  db: D1Database,
+  id: string,
+): Promise<Annotation[]> {
+  const { results } = await db
+    .prepare(
+      "SELECT id, object_id, text, actor, ts FROM annotations WHERE object_id = ? ORDER BY ts DESC",
+    )
+    .bind(id)
+    .all<Annotation>();
+  return results;
+}
+
+export async function listActivity(
+  db: D1Database,
+  limit: number,
+): Promise<ActionLogEntry[]> {
+  const { results } = await db
+    .prepare(
+      "SELECT id, object_id, action, actor, payload, ts FROM actions_log ORDER BY id DESC LIMIT ?",
+    )
+    .bind(limit)
+    .all<ActionLogEntry>();
+  return results;
 }
 
 // Neighbors of an object: every object joined to it by a link in either

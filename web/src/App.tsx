@@ -5,6 +5,8 @@ import { useOntology, useUtcClock } from "./hooks";
 import { MapView } from "./map/MapView";
 import { LayerTree } from "./components/LayerTree";
 import { Inspector } from "./components/Inspector";
+import { GraphView } from "./components/GraphView";
+import { ActivityLog } from "./components/ActivityLog";
 
 export function App() {
   const clock = useUtcClock();
@@ -13,6 +15,7 @@ export function App() {
   const [severityMin, setSeverityMin] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<string>("map");
+  const [activityVersion, setActivityVersion] = useState(0);
 
   // Default every type visible the first time the registry loads.
   useEffect(() => {
@@ -36,11 +39,6 @@ export function App() {
       onto.objects.filter((o) => visible.has(o.type) && o.severity >= severityMin)
         .length,
     [onto.objects, visible, severityMin],
-  );
-
-  const selected = useMemo(
-    () => onto.objects.find((o) => o.id === selectedId) ?? null,
-    [onto.objects, selectedId],
   );
 
   const toggle = (id: string) =>
@@ -130,24 +128,23 @@ export function App() {
                 onSelect={setSelectedId}
               />
             ) : (
-              <div className="mer-center-placeholder">EGO GRAPH / PHASE 6</div>
+              <GraphView selectedId={selectedId} typeMap={typeMap} onSelect={setSelectedId} />
             )}
           </div>
         </main>
 
         <aside className="mer-inspector">
-          <Inspector object={selected} typeMap={typeMap} />
+          <Inspector
+            selectedId={selectedId}
+            typeMap={typeMap}
+            onSelect={setSelectedId}
+            onActed={() => setActivityVersion((v) => v + 1)}
+          />
         </aside>
       </div>
 
       <footer className="mer-bottom">
-        <div className="mer-section-head">
-          <span>Activity Log</span>
-          <Icon icon="history" size={12} />
-        </div>
-        <div className="mer-empty">
-          Audit trail is empty. Operator actions appear here once enabled in Phase 6.
-        </div>
+        <ActivityLog version={activityVersion} onSelect={setSelectedId} />
       </footer>
     </div>
   );
