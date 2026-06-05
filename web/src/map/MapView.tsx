@@ -314,7 +314,7 @@ export function MapView(props: Props) {
       if (satIconRef.current) {
         layers.push(
           new IconLayer<SatPoint>({
-            id: "sat-points",
+            id: "sat-icons",
             data: satPointsRef.current,
             getPosition: (d) => [d.lon, d.lat, d.altKm * 1000 * altScale],
             getIcon: () => "sat",
@@ -325,25 +325,41 @@ export function MapView(props: Props) {
             sizeMinPixels: 9,
             getColor: [234, 246, 255, 245],
             billboard: true,
-            pickable: true,
+            pickable: false,
             parameters: { depthCompare: "less-equal" },
           }),
         );
       } else {
         layers.push(
           new ScatterplotLayer<SatPoint>({
-            id: "sat-points",
+            id: "sat-icons",
             data: satPointsRef.current,
             getPosition: (d) => [d.lon, d.lat, d.altKm * 1000 * altScale],
             getRadius: 2.8,
             radiusUnits: "pixels",
             radiusMinPixels: 2,
             getFillColor: [234, 246, 255, 240],
-            pickable: true,
+            pickable: false,
             parameters: { depthCompare: "less-equal" },
           }),
         );
       }
+      // Invisible hit-test layer (IconLayer picking is unreliable, so a
+      // transparent ScatterplotLayer carries the picking). Depth-tested so
+      // back-of-globe sats are not picked through the earth.
+      layers.push(
+        new ScatterplotLayer<SatPoint>({
+          id: "sat-points",
+          data: satPointsRef.current,
+          getPosition: (d) => [d.lon, d.lat, d.altKm * 1000 * altScale],
+          getRadius: 7,
+          radiusUnits: "pixels",
+          radiusMinPixels: 7,
+          getFillColor: [0, 0, 0, 0],
+          pickable: true,
+          parameters: { depthCompare: "less-equal" },
+        }),
+      );
     }
     overlay.setProps({ layers });
   }, []);
