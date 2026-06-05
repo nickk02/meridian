@@ -57,6 +57,7 @@ export interface ObjectDetail {
   neighbors: { object: OntologyObject; link: OntologyLink }[];
   state: { watch: number; flag: number };
   annotations: { id: number; object_id: string; text: string; actor: string; ts: number }[];
+  entities: import("../../shared/types").EntityRef[];
 }
 
 // Fetches full detail for the selected object and exposes a refresh, used after

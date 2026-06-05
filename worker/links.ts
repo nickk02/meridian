@@ -31,6 +31,7 @@ export interface DerivedLink {
   source_id: string;
   target_id: string;
   kind: "PROXIMATE_TO" | "CO_LOCATED";
+  basis: string;
   meta: { km: number };
   confidence: number;
 }
@@ -61,6 +62,7 @@ export function computeLinks(objects: GeoObject[]): DerivedLink[] {
         source_id: d.id,
         target_id: best.anchor.id,
         kind: "PROXIMATE_TO",
+        basis: `spatial:nearest_anchor<=${PROXIMATE_MAX_KM}km`,
         meta: { km: round(best.km, 1) },
         confidence: round(1 - best.km / PROXIMATE_MAX_KM),
       });
@@ -86,6 +88,7 @@ export function computeLinks(objects: GeoObject[]): DerivedLink[] {
         source_id: s,
         target_id: t,
         kind: "CO_LOCATED",
+        basis: `spatial:same_type<=${COLOCATED_MAX_KM}km`,
         meta: { km: round(km, 1) },
         confidence: round(1 - km / COLOCATED_MAX_KM),
       });
@@ -107,8 +110,8 @@ export async function deriveLinks(db: D1Database): Promise<number> {
 
   const now = Date.now();
   const stmt = db.prepare(
-    `INSERT INTO links (id, source_id, target_id, kind, meta, confidence, created_ts)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+    `INSERT INTO links (id, source_id, target_id, kind, basis, meta, confidence, created_ts)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
   );
   for (let i = 0; i < links.length; i += 50) {
     const chunk = links.slice(i, i + 50);
@@ -119,6 +122,7 @@ export async function deriveLinks(db: D1Database): Promise<number> {
           l.source_id,
           l.target_id,
           l.kind,
+          l.basis,
           JSON.stringify(l.meta),
           l.confidence,
           now,

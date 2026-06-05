@@ -109,11 +109,49 @@ export function Inspector({ selectedId, typeMap, onSelect, onActed }: Props) {
             <span className="mer-mono">{detail.object.lat.toFixed(4)}</span>
             <span>LON</span>
             <span className="mer-mono">{detail.object.lon.toFixed(4)}</span>
-            <span>SOURCE</span>
-            <span className="mer-mono">{detail.object.source ?? "n/a"}</span>
             <span>EVENT</span>
             <span className="mer-mono">{fmtTs(detail.object.ts)}</span>
           </div>
+
+          <div className="mer-sub">PROVENANCE</div>
+          <div className="mer-kv">
+            <span>SOURCE</span>
+            <span className="mer-mono">
+              {detail.object.source_url ? (
+                <a href={detail.object.source_url} target="_blank" rel="noreferrer" className="mer-prov-link">
+                  {detail.object.source ?? "source"}
+                </a>
+              ) : (
+                detail.object.source ?? "n/a"
+              )}
+            </span>
+            <span>FETCHED</span>
+            <span className="mer-mono">
+              {detail.object.fetched_at ? fmtTs(detail.object.fetched_at) : "n/a"}
+            </span>
+            <span>CONF</span>
+            <span className="mer-mono">
+              <span className="mer-conf-bar">
+                <span style={{ width: `${Math.round(detail.object.confidence * 100)}%` }} />
+              </span>
+              {detail.object.confidence.toFixed(2)}
+            </span>
+          </div>
+
+          {detail.entities.length > 0 && (
+            <>
+              <div className="mer-sub">RESOLVED ENTITIES</div>
+              <div className="mer-neighbors">
+                {detail.entities.map((e) => (
+                  <div key={e.entity.id} className="mer-entity-row" title={`${e.role} via ${e.source}`}>
+                    <Tag minimal className="mer-mono">{e.entity.type}</Tag>
+                    <span className="mer-neighbor-name">{e.entity.canonical_name}</span>
+                    <Tag minimal className="mer-mono mer-neighbor-kind">{e.confidence.toFixed(2)}</Tag>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
           {detail.object.props && Object.keys(detail.object.props).length > 0 && (
             <>
@@ -137,7 +175,12 @@ export function Inspector({ selectedId, typeMap, onSelect, onActed }: Props) {
           ) : (
             <div className="mer-neighbors">
               {detail.neighbors.slice(0, 40).map((n) => (
-                <button key={n.object.id} className="mer-neighbor" onClick={() => onSelect(n.object.id)}>
+                <button
+                  key={n.object.id}
+                  className="mer-neighbor"
+                  onClick={() => onSelect(n.object.id)}
+                  title={`basis: ${n.link.basis}`}
+                >
                   <span className="mer-swatch" style={{ background: typeMap.get(n.object.type)?.color }} />
                   <span className="mer-neighbor-name">{n.object.name}</span>
                   <Tag minimal className="mer-mono mer-neighbor-kind">

@@ -54,6 +54,9 @@ export interface OntologyObject {
   severity: number;
   ts: number;
   source: string | null;
+  source_url: string | null;
+  fetched_at: number | null;
+  confidence: number;
   domain: Domain;
   admin0: string | null;
   admin1: string | null;
@@ -62,13 +65,18 @@ export interface OntologyObject {
   last_seen: number;
 }
 
-export type LinkKind = "PROXIMATE_TO" | "CO_LOCATED" | "ENRICHED_BY";
+export type LinkKind =
+  | "PROXIMATE_TO"
+  | "CO_LOCATED"
+  | "ENRICHED_BY"
+  | "CORRELATED_WITH";
 
 export interface OntologyLink {
   id: string;
   source_id: string;
   target_id: string;
   kind: LinkKind;
+  basis: string;
   meta: Record<string, unknown> | null;
   confidence: number;
   created_ts: number;

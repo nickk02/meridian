@@ -14,6 +14,9 @@ export interface IngestObject {
   // ISO 3166-1 alpha-3, set by adapters whose feed carries it; otherwise
   // backfilled from coordinates by the gazetteer (Stage C).
   admin0?: string;
+  // Per-event upstream URL when the feed provides one; ingest falls back to the
+  // source's endpoint otherwise (Stage D provenance).
+  source_url?: string;
   props: Record<string, unknown>;
 }
 

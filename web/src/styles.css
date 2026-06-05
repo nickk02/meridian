@@ -507,3 +507,39 @@ body {
     margin-bottom: 6px;
   }
 }
+
+/* ----- Provenance (Stage D) ----------------------------------------------- */
+
+.mer-prov-link {
+  color: var(--mer-cyan);
+  text-decoration: none;
+}
+.mer-prov-link:hover {
+  text-decoration: underline;
+}
+
+.mer-conf-bar {
+  display: inline-block;
+  width: 48px;
+  height: 6px;
+  background: var(--mer-border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.mer-conf-bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--mer-cyan-dim), var(--mer-cyan));
+}
+
+.mer-entity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  font-size: 12px;
+  color: #c6d0de;
+  border-left: 2px solid var(--mer-cyan-dim);
+}

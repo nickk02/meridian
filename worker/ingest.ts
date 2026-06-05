@@ -44,6 +44,44 @@ const SOURCE_DOMAIN: Record<string, Domain> = {
   launchlibrary: "space",
 };
 
+// Static per-source reliability for the confidence score (Stage D).
+const RELIABILITY: Record<string, number> = {
+  usgs: 0.98, nws: 0.97, nhc: 0.97, nifc: 0.95, eonet: 0.95,
+  gdacs: 0.95, cneos: 0.95, launchlibrary: 0.9,
+  airplanes: 0.85, digitraffic: 0.85,
+};
+
+// Fallback source endpoint when a feed item has no per-event URL.
+const SOURCE_URL: Record<string, string> = {
+  usgs: "https://earthquake.usgs.gov/earthquakes/",
+  eonet: "https://eonet.gsfc.nasa.gov/",
+  gdacs: "https://www.gdacs.org/",
+  nws: "https://www.weather.gov/",
+  nhc: "https://www.nhc.noaa.gov/",
+  nifc: "https://www.nifc.gov/",
+  cneos: "https://cneos.jpl.nasa.gov/fireballs/",
+  airplanes: "https://airplanes.live/",
+  digitraffic: "https://www.digitraffic.fi/en/marine-traffic/",
+  launchlibrary: "https://thespacedevs.com/llapi",
+};
+
+// confidence = reliability x recency. Recency decays linearly over a week to a
+// floor; future-dated events (upcoming launches) read as fully current.
+function confidenceFor(source: string, ts: number, now: number): number {
+  const reliability = RELIABILITY[source] ?? 0.7;
+  const ageDays = Math.max(0, (now - ts) / 86400000);
+  const recency = Math.max(0.2, 1 - ageDays / 7);
+  return Math.round(reliability * recency * 1000) / 1000;
+}
+
+function sourceUrlFor(o: IngestObject): string | null {
+  const p = o.props ?? {};
+  const fromProps = p["url"] ?? p["report"] ?? p["advisory"];
+  if (typeof fromProps === "string") return fromProps;
+  if (o.source_url) return o.source_url;
+  return SOURCE_URL[o.source] ?? null;
+}
+
 // Fast-moving sources whose stale positions are misleading: pruned aggressively
 // so a landed aircraft or departed vessel drops off the map within the hour.
 const FAST_SOURCES = ["airplanes", "digitraffic"];
@@ -68,13 +106,16 @@ const LINK_REBUILD_MS = 55 * 60 * 1000;
 const PRUNE_AGE_MS = 12 * 60 * 60 * 1000;
 
 const UPSERT = `INSERT INTO objects
-  (id, type, name, lat, lon, severity, ts, source, domain, admin0, props, first_seen, last_seen)
-  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)
+  (id, type, name, lat, lon, severity, ts, source, source_url, fetched_at,
+   confidence, domain, admin0, props, first_seen, last_seen)
+  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15)
   ON CONFLICT(id) DO UPDATE SET
     name = excluded.name, lat = excluded.lat, lon = excluded.lon,
     severity = excluded.severity, ts = excluded.ts, source = excluded.source,
-    domain = excluded.domain, admin0 = excluded.admin0,
-    props = excluded.props, last_seen = excluded.last_seen`;
+    source_url = excluded.source_url, fetched_at = excluded.fetched_at,
+    confidence = excluded.confidence, domain = excluded.domain,
+    admin0 = excluded.admin0, props = excluded.props,
+    last_seen = excluded.last_seen`;
 
 async function upsertObjects(
   db: D1Database,
@@ -96,6 +137,9 @@ async function upsertObjects(
           o.severity,
           o.ts,
           o.source,
+          sourceUrlFor(o),
+          now,
+          confidenceFor(o.source, o.ts, now),
           SOURCE_DOMAIN[o.source] ?? "other",
           o.admin0 ?? null,
           JSON.stringify(o.props),

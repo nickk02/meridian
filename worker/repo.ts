@@ -29,6 +29,9 @@ interface ObjectRow {
   severity: number;
   ts: number;
   source: string | null;
+  source_url: string | null;
+  fetched_at: number | null;
+  confidence: number | null;
   domain: string | null;
   admin0: string | null;
   admin1: string | null;
@@ -47,6 +50,9 @@ function mapObject(row: ObjectRow): OntologyObject {
     severity: row.severity,
     ts: row.ts,
     source: row.source,
+    source_url: row.source_url ?? null,
+    fetched_at: row.fetched_at ?? null,
+    confidence: row.confidence ?? 1,
     domain: (row.domain ?? "other") as OntologyObject["domain"],
     admin0: row.admin0,
     admin1: row.admin1,
@@ -61,6 +67,7 @@ interface LinkRow {
   source_id: string;
   target_id: string;
   kind: string;
+  basis: string | null;
   meta: string | null;
   confidence: number;
   created_ts: number;
@@ -72,6 +79,7 @@ function mapLink(row: LinkRow): OntologyLink {
     source_id: row.source_id,
     target_id: row.target_id,
     kind: row.kind as OntologyLink["kind"],
+    basis: row.basis ?? "unspecified",
     meta: parseJson(row.meta),
     confidence: row.confidence,
     created_ts: row.created_ts,
@@ -239,7 +247,7 @@ export async function getNeighbors(
 ): Promise<{ object: OntologyObject; link: OntologyLink }[]> {
   const { results } = await db
     .prepare(
-      `SELECT l.id AS l_id, l.source_id, l.target_id, l.kind, l.meta,
+      `SELECT l.id AS l_id, l.source_id, l.target_id, l.kind, l.basis, l.meta,
               l.confidence, l.created_ts,
               o.id, o.type, o.name, o.lat, o.lon, o.severity, o.ts,
               o.source, o.domain, o.admin0, o.admin1, o.props,
@@ -261,6 +269,7 @@ export async function getNeighbors(
       source_id: r["source_id"] as string,
       target_id: r["target_id"] as string,
       kind: r["kind"] as string,
+      basis: (r["basis"] as string | null) ?? null,
       meta: (r["meta"] as string | null) ?? null,
       confidence: r["confidence"] as number,
       created_ts: r["created_ts"] as number,
