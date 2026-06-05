@@ -47,8 +47,9 @@ const GLYPH: Record<string, string> = {
   AIRCRAFT: `<path ${FILL} d="M12 2c.9 0 1.4 1.2 1.4 3v4.3l7.6 4.4v2l-7.6-2.2v3.9l2 1.6v1.6L12 23l-3.4-1.4v-1.6l2-1.6v-3.9L3 18.7v-2l7.6-4.4V5c0-1.8.5-3 1.4-3z"/>`,
   // ship (hull, deck, mast)
   VESSEL: `<path ${FILL} d="M3.5 14h17l-2.2 5.2H5.7z"/><path ${STROKE} d="M12 3v8M8.5 7H12M12 11v3"/>`,
-  // satellite (body, two panels, antenna)
-  SATELLITE: `<rect ${STROKE} x="9.5" y="9.5" width="5" height="5" rx="0.6"/><path ${STROKE} d="M9.5 12H3.5M14.5 12h6M5.5 9.5v5M18.5 9.5v5M12 9.5V5l2-1"/>`,
+  // satellite: bold filled body + two solar panels + antenna, so it reads as a
+  // satellite at the small on-globe render size rather than a faint mark.
+  SATELLITE: `<rect ${FILL} x="9.6" y="8.8" width="4.8" height="6.4" rx="0.8"/><rect ${FILL} x="1.6" y="9.9" width="6" height="4.2" rx="0.4"/><rect ${FILL} x="16.4" y="9.9" width="6" height="4.2" rx="0.4"/><path ${STROKE} d="M7.6 12h2M14.4 12h2M12 8.8V4.6"/><circle ${FILL} cx="12" cy="3.8" r="1.2"/>`,
 };
 
 // Map an ontology object's type to its glyph id, with severity-independent
