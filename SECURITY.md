@@ -1,21 +1,35 @@
-# Security Policy
+# Security policy
 
-## Supported Versions
+Meridian takes security findings seriously and fixes them before new features
+ship.
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+## Reporting a vulnerability
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+Please report vulnerabilities privately rather than opening a public issue.
 
-## Reporting a Vulnerability
+* Open a [private security advisory](https://github.com/nickk02/meridian/security/advisories/new) on the repository, or
+* email the maintainer at the address on the GitHub profile.
 
-Use this section to tell people how to report a vulnerability.
+Include enough detail to reproduce: the affected endpoint or component, the
+request or input, and the observed versus expected behavior. A proof of concept
+helps but is not required.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+## Scope
+
+In scope:
+
+* The Worker API (`/api/*`) and its authentication, including the token-guarded ingest endpoint.
+* The SPA: any path from feed data to the DOM (for example, rendering a `source_url` or object name).
+* Provenance and audit integrity: anything that lets an action be forged, an audit entry be dropped, or a link be created without a basis.
+
+Out of scope:
+
+* The upstream public data feeds themselves. Meridian only reads them.
+* Findings that require a Cloudflare account compromise or physical access to the operator's machine.
+* Rate-limit or denial-of-service reports against the free-tier instance without a concrete amplification or bypass.
+
+## Handling
+
+Reports are acknowledged, triaged, and fixed on a priority track ahead of feature
+work. A fix ships before the related feature area is extended. Reporters are
+credited in the advisory unless they ask not to be.
