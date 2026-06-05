@@ -543,6 +543,19 @@ body,
 
 .mer-tree .bp5-tree-node-content {
   height: 28px;
+  border-radius: 2px;
+}
+/* A visible (selected) layer is marked by its eye icon, swatch, and a quiet cyan
+   tint, not Blueprint's default bright blue fill which fights the dark console. */
+.mer-tree .bp5-tree-node.bp5-tree-node-selected > .bp5-tree-node-content {
+  background-color: rgba(54, 214, 231, 0.09);
+  box-shadow: inset 2px 0 0 var(--mer-cyan-dim);
+}
+.mer-tree .bp5-tree-node-content:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+.mer-tree .bp5-tree-node.bp5-tree-node-selected > .bp5-tree-node-content:hover {
+  background-color: rgba(54, 214, 231, 0.14);
 }
 
 /* ----- Inspector ---------------------------------------------------------- */
@@ -775,25 +788,94 @@ body,
     background-size: 32px 32px;
   }
   .mer-navbar.bp5-navbar {
-    padding: 0 6px;
-    height: 52px;
+    padding: 0 8px;
+    height: 50px;
   }
   .mer-brand {
-    font-size: 13px;
-    letter-spacing: 0.3em;
+    font-size: 14px;
+    letter-spacing: 0.28em;
   }
+  /* The tagline is decorative; drop it on phones so the header breathes. */
   .mer-brand-sub {
-    font-size: 8px;
-    letter-spacing: 0.16em;
+    display: none;
   }
-  /* Bigger touch targets for the layer rows and segmented control. */
+
+  /* Top-of-map controls are tight on a phone: shrink the overlay chips (left)
+     and the projection toggle (right) so they never collide, and give them a
+     little more breathing room from the edges. */
+  .mer-overlay-chips {
+    top: 8px;
+    left: 8px;
+    gap: 4px;
+  }
+  .mer-overlay-chip {
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    padding: 5px 7px;
+    gap: 5px;
+  }
+  .mer-overlay-dot {
+    width: 7px;
+    height: 7px;
+  }
+  .mer-proj-toggle {
+    top: 8px;
+    right: 8px;
+  }
+  .mer-proj-btn {
+    font-size: 8px;
+    letter-spacing: 0.12em;
+    padding: 6px 9px;
+  }
+  /* "RESET VIEW" -> "RESET" to save width next to the chips. */
+  .mer-proj-view {
+    display: none;
+  }
+
+  /* Layers drawer: the drawer already has a "Layers" title, so drop the panel's
+     own header and chrome to kill the doubled heading and reclaim space. */
+  .mer-drawer-body .mer-layerctrl {
+    border: none;
+    background: transparent;
+  }
+  .mer-drawer-body .mer-layerctrl-head {
+    display: none;
+  }
+  .mer-drawer-body .mer-layerctrl-body {
+    border-top: none;
+    padding: 8px 12px 16px;
+  }
+
+  /* Feed sheet scope: keep the preset and domain chip rows to a single
+     swipeable line instead of wrapping into a tall stack. */
+  .mer-feed-presets,
+  .mer-feed-domains {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mer-feed-presets::-webkit-scrollbar,
+  .mer-feed-domains::-webkit-scrollbar {
+    display: none;
+  }
+  .mer-feed-preset,
+  .mer-domain-toggle,
+  .mer-region-btn {
+    flex: 0 0 auto;
+  }
+  .mer-feed-scope {
+    padding: 9px 12px;
+  }
+
+  /* Bigger touch targets for the layer rows. */
   .mer-tree .bp5-tree-node-content {
-    height: 36px;
+    height: 38px;
   }
   .mer-neighbor,
   .mer-activity-row {
-    padding-top: 9px;
-    padding-bottom: 9px;
+    padding-top: 10px;
+    padding-bottom: 10px;
   }
   .maplibregl-ctrl-bottom-right {
     margin-bottom: 6px;
