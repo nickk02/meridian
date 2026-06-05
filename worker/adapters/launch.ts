@@ -4,7 +4,9 @@
 import type { IngestObject } from "./types";
 import { cachedFetchJson } from "../cache";
 
-const URL = "https://ll.thespacedevs.com/2.2.0/launch/upcoming/?limit=30";
+// The production host rate-limits Cloudflare's shared egress IPs; the lldev
+// mirror serves the same data with more lenient limits. Cached 6h regardless.
+const URL = "https://lldev.thespacedevs.com/2.2.0/launch/upcoming/?limit=30";
 
 interface Launch {
   id: string;
