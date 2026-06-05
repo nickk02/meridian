@@ -30,7 +30,17 @@ const ANCHOR = new Set(["PORT", "CHOKEPOINT", "AIRPORT"]);
 
 // Home camera: planet upright (bearing 0, pitch 0), poles vertical. Both the
 // fly-in target and the Reset View control return here.
-const HOME = { center: [12, 28] as [number, number], zoom: 1.6, bearing: 0, pitch: 0 };
+const HOME = { center: [12, 28] as [number, number], zoom: 2.3, bearing: 0, pitch: 0 };
+
+// Zoom clamps. minZoom keeps the globe filling the viewport (no shrinking it to
+// a small ball in black margins); the flat view can pull back a little further
+// since it tiles the whole world. maxZoom stops at the depth CARTO dark-matter
+// still has street tiles, so you can inspect a city incident without hitting
+// blur or void. minZoom is applied AFTER the fly-in so the deep-space intro
+// (which starts at zoom 0.2) still plays.
+const MIN_ZOOM_GLOBE = 2.2;
+const MIN_ZOOM_FLAT = 1.0;
+const MAX_ZOOM = 18;
 
 // Bad coordinates are rejected at ingest (shared/coords), so this client filter
 // is defense in depth: it keeps a stray endpoint off the map if anything ever
@@ -213,6 +223,7 @@ export function MapView(props: Props) {
       center: [12, 28],
       // Start pulled back into space for the fly-in; flat view opens framed.
       zoom: startGlobe ? 0.2 : 1.35,
+      maxZoom: MAX_ZOOM,
       attributionControl: { compact: true },
     });
     mapRef.current = map;
@@ -558,6 +569,14 @@ export function MapView(props: Props) {
 
       readyRef.current = true;
       syncData();
+
+      // Apply the zoom floor. On globe, wait out the fly-in (which starts from
+      // deep space at zoom 0.2) before clamping, so the intro still plays.
+      if (startGlobe) {
+        window.setTimeout(() => mapRef.current?.setMinZoom(MIN_ZOOM_GLOBE), 4300);
+      } else {
+        map.setMinZoom(MIN_ZOOM_FLAT);
+      }
     });
 
     return () => {
@@ -751,8 +770,11 @@ export function MapView(props: Props) {
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
     if (globe) {
+      // Loosen the floor before easing so a flat-zoomed-out camera is not
+      // snapped, then clamp to the globe floor.
       map.setProjection({ type: "globe" });
       applyGlobeSky(map);
+      map.setMinZoom(MIN_ZOOM_GLOBE);
       // Stay where the operator is (don't yank zoom), but restore HOME's upright
       // bearing/pitch so the poles are vertical. HOME is the single source.
       map.easeTo({
@@ -763,6 +785,7 @@ export function MapView(props: Props) {
       });
     } else {
       map.setProjection({ type: "mercator" });
+      map.setMinZoom(MIN_ZOOM_FLAT);
       map.easeTo({ bearing: HOME.bearing, pitch: HOME.pitch, duration: 800 });
     }
   }, [globe]);
