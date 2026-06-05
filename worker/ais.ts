@@ -88,9 +88,30 @@ export class AisCollector extends DurableObject<Env> {
 
     const positions = new Map<string, Pos>();
     let total = 0;
-    let sample = "";
     let firstType = "";
     let closeInfo = "";
+    // aisstream delivers each JSON message as a Blob; Blob.text() is async so it
+    // cannot be decoded inside the sync message handler. Buffer the Blobs and
+    // decode them after the window (strings/ArrayBuffers are handled inline).
+    const blobs: Blob[] = [];
+    const handle = (text: string): void => {
+      try {
+        const msg = JSON.parse(text) as {
+          MessageType?: string;
+          MetaData?: { MMSI?: number; ShipName?: string; latitude?: number; longitude?: number };
+        };
+        if (msg.MessageType !== "PositionReport" || !msg.MetaData) return;
+        const md = msg.MetaData;
+        const mmsi = String(md.MMSI ?? "");
+        const lat = Number(md.latitude);
+        const lon = Number(md.longitude);
+        if (!mmsi || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        positions.set(mmsi, { name: String(md.ShipName ?? "").trim(), lat, lon, ts: Date.now() });
+      } catch {
+        /* skip malformed frame */
+      }
+    };
+
     await new Promise<void>((resolve) => {
       let settled = false;
       const finish = () => {
@@ -106,37 +127,15 @@ export class AisCollector extends DurableObject<Env> {
       };
       const timer = setTimeout(finish, COLLECT_WINDOW_MS);
       ws.addEventListener("message", (ev) => {
-        try {
-          const raw: unknown = ev.data;
-          // aisstream sends JSON in BINARY (ArrayBuffer) frames, not text.
-          const data =
-            typeof raw === "string"
-              ? raw
-              : raw instanceof ArrayBuffer
-                ? new TextDecoder().decode(raw)
-                : ArrayBuffer.isView(raw)
-                  ? new TextDecoder().decode(raw as ArrayBufferView)
-                  : "";
-          total++;
-          if (total <= 1) {
-            firstType = `${typeof raw}/${(raw as { constructor?: { name?: string } })?.constructor?.name ?? "?"}`;
-            sample = data.slice(0, 240);
-          }
-          const msg = JSON.parse(data) as {
-            MessageType?: string;
-            MetaData?: { MMSI?: number; ShipName?: string; latitude?: number; longitude?: number };
-          };
-          if (msg.MessageType !== "PositionReport" || !msg.MetaData) return;
-          const md = msg.MetaData;
-          const mmsi = String(md.MMSI ?? "");
-          const lat = Number(md.latitude);
-          const lon = Number(md.longitude);
-          if (!mmsi || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
-          positions.set(mmsi, { name: String(md.ShipName ?? "").trim(), lat, lon, ts: Date.now() });
-          if (positions.size >= MAX_VESSELS) finish();
-        } catch {
-          /* skip malformed frame */
+        const raw: unknown = ev.data;
+        total++;
+        if (total <= 1) {
+          firstType = `${typeof raw}/${(raw as { constructor?: { name?: string } })?.constructor?.name ?? "?"}`;
         }
+        if (typeof raw === "string") handle(raw);
+        else if (raw instanceof ArrayBuffer) handle(new TextDecoder().decode(raw));
+        else if (ArrayBuffer.isView(raw)) handle(new TextDecoder().decode(raw as ArrayBufferView));
+        else if (raw instanceof Blob) blobs.push(raw);
       });
       ws.addEventListener("close", (ev: CloseEvent) => {
         closeInfo = `code=${ev.code} reason=${ev.reason}`;
@@ -156,8 +155,18 @@ export class AisCollector extends DurableObject<Env> {
       );
     });
 
-    this.setMeta({ opened: true, total, kept: positions.size, firstType, sample, closeInfo });
+    // Decode the buffered Blob frames.
+    for (const b of blobs) {
+      try {
+        handle(await b.text());
+      } catch {
+        /* skip */
+      }
+    }
 
+    this.setMeta({ opened: true, total, blobs: blobs.length, kept: positions.size, firstType, closeInfo });
+
+    let n = 0;
     for (const [mmsi, p] of positions) {
       this.ctx.storage.sql.exec(
         "INSERT OR REPLACE INTO vessels (mmsi, name, lat, lon, ts) VALUES (?, ?, ?, ?, ?)",
@@ -167,6 +176,7 @@ export class AisCollector extends DurableObject<Env> {
         p.lon,
         p.ts,
       );
+      if (++n >= MAX_VESSELS) break;
     }
   }
 }
