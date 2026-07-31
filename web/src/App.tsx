@@ -220,6 +220,9 @@ export function App() {
                 <Tag minimal className="mer-mono" style={{ marginRight: 10 }}>
                   {onto.links.length} LINKS
                 </Tag>
+                <Tag minimal className="mer-mono" style={{ marginRight: 10 }}>
+                  {new Set(onto.objects.map((o) => o.domain)).size} DOMAINS
+                </Tag>
               </>
             )}
             <Tag
