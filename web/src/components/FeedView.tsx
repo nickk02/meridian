@@ -45,6 +45,15 @@ export function FeedView({ objects, incidents, crossIncidents, selectedId, onSel
   const [region, setRegion] = useState("WORLD");
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  // Domains with zero live objects render dimmed, so the gap reads as
+  // roadmap rather than breakage. Counted from the same objects the feed
+  // already has, not a separate fetch.
+  const domainCounts = useMemo(() => {
+    const m = new Map<Domain, number>();
+    for (const o of objects) m.set(o.domain, (m.get(o.domain) ?? 0) + 1);
+    return m;
+  }, [objects]);
+
   const inRegion = (admin0: string | null) =>
     region === "WORLD" || (admin0 != null && CONTINENT[admin0] === region);
 
@@ -111,17 +120,21 @@ export function FeedView({ objects, incidents, crossIncidents, selectedId, onSel
               </span>
             </div>
             <div className="mer-feed-domains">
-              {ALL_DOMAINS.map((d) => (
-                <button
-                  key={d}
-                  className={`mer-domain-toggle ${domains.has(d) ? "on" : ""}`}
-                  style={{ borderColor: domains.has(d) ? DOMAIN_COLOR[d] : "transparent" }}
-                  onClick={() => toggleDomain(d)}
-                >
-                  <span className="mer-domain-dot" style={{ background: DOMAIN_COLOR[d] }} />
-                  {d}
-                </button>
-              ))}
+              {ALL_DOMAINS.map((d) => {
+                const empty = (domainCounts.get(d) ?? 0) === 0;
+                return (
+                  <button
+                    key={d}
+                    className={`mer-domain-toggle ${domains.has(d) ? "on" : ""} ${empty ? "empty" : ""}`}
+                    style={{ borderColor: domains.has(d) ? DOMAIN_COLOR[d] : "transparent" }}
+                    onClick={() => toggleDomain(d)}
+                    title={empty ? "No live objects in this domain yet" : undefined}
+                  >
+                    <span className="mer-domain-dot" style={{ background: DOMAIN_COLOR[d] }} />
+                    {d}
+                  </button>
+                );
+              })}
             </div>
           </>
         )}
