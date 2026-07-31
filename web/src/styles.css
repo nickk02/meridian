@@ -1282,6 +1282,11 @@ body,
   white-space: nowrap;
 }
 
+@media (min-width: 1200px) {
+  .mer-ticker-name { font-size: 13px; }
+  .mer-ticker-time { font-size: 11px; }
+}
+
 .mer-live-dot {
   width: 8px;
   height: 8px;
