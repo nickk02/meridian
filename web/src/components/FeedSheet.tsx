@@ -15,8 +15,12 @@ interface Props {
   activityVersion: number;
 }
 
-const COLLAPSED = 46; // ticker-only height
-const SNAP = COLLAPSED + 28; // below this we treat the sheet as collapsed
+const COLLAPSED_NARROW = 46; // ticker-only height, mobile and narrow desktop
+const COLLAPSED_WIDE = 64; // taller ticker row above the desktop breakpoint
+const WIDE_BREAKPOINT = 1200;
+const collapsedHeight = () =>
+  window.innerWidth >= WIDE_BREAKPOINT ? COLLAPSED_WIDE : COLLAPSED_NARROW;
+const SNAP_MARGIN = 28;
 const DEFAULT_OPEN = () => Math.round(window.innerHeight * 0.6);
 
 function fmtClock(ts: number): string {
@@ -28,10 +32,10 @@ function fmtClock(ts: number): string {
 // grip. Replaces both the old activity-log strip and the FEED top-level tab.
 export function FeedSheet(props: Props) {
   const { objects, newIds, onSelect } = props;
-  const [height, setHeight] = useState(COLLAPSED);
+  const [height, setHeight] = useState(collapsedHeight);
   const [showHistory, setShowHistory] = useState(false);
   const drag = useRef<{ y: number; h: number; moved: boolean } | null>(null);
-  const expanded = height > SNAP;
+  const expanded = height > collapsedHeight() + SNAP_MARGIN;
 
   // Newest events, newest first, for the ticker.
   const ticker = useMemo(
@@ -44,7 +48,7 @@ export function FeedSheet(props: Props) {
   );
 
   const clamp = (h: number) =>
-    Math.min(window.innerHeight - 92, Math.max(COLLAPSED, h));
+    Math.min(window.innerHeight - 92, Math.max(collapsedHeight(), h));
 
   const onPointerDown = (e: React.PointerEvent) => {
     drag.current = { y: e.clientY, h: height, moved: false };
@@ -63,7 +67,8 @@ export function FeedSheet(props: Props) {
     if (d && !d.moved) toggle(); // a tap on the grip toggles
   };
 
-  const toggle = () => setHeight((h) => (h > SNAP ? COLLAPSED : DEFAULT_OPEN()));
+  const toggle = () =>
+    setHeight((h) => (h > collapsedHeight() + SNAP_MARGIN ? collapsedHeight() : DEFAULT_OPEN()));
 
   return (
     <div className="mer-sheet" style={{ height }}>
@@ -92,7 +97,7 @@ export function FeedSheet(props: Props) {
               <Icon icon="history" size={11} />
               History
             </button>
-            <button className="mer-sheet-collapse" onClick={() => setHeight(COLLAPSED)} aria-label="Collapse">
+            <button className="mer-sheet-collapse" onClick={() => setHeight(collapsedHeight())} aria-label="Collapse">
               <Icon icon="chevron-down" size={14} color="#6b7689" />
             </button>
           </div>
