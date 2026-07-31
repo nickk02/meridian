@@ -22,7 +22,7 @@
     "@fontsource/chakra-petch": "^5.2.7",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "d3-force": "^3.0.0",
-    "hono": "^4.7.0",
+    "hono": "^4.12.27",
     "maplibre-gl": "^5.24.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -37,7 +37,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.7.2",
-    "vite": "^6.0.5",
-    "wrangler": "^4.98.0"
+    "vite": "^8.1.5",
+    "wrangler": "^4.114.0"
   }
 }
