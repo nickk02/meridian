@@ -82,7 +82,16 @@ export const firmsAdapter: Adapter = {
     const r = await fetch(`${FIRMS_BASE}/${key}/VIIRS_SNPP_NRT/world/1`, {
       headers: { "user-agent": "meridian-cop (github.com/nickk02/meridian)" },
     });
-    return r.ok ? await r.text() : "";
+    if (!r.ok) throw new Error(`FIRMS returned ${r.status}: ${await r.text()}`);
+    const text = await r.text();
+    // FIRMS returns HTTP 200 with a plain-text error body (e.g. "Invalid MAP_KEY")
+    // for a bad/expired key instead of a real error status, so a non-CSV body is
+    // the only signal. Throw so it surfaces in the ingest errors instead of
+    // silently producing zero fires forever.
+    if (!text.trim().toLowerCase().startsWith("latitude")) {
+      throw new Error(`FIRMS returned non-CSV body: ${text.slice(0, 200)}`);
+    }
+    return text;
   },
   normalize(raw) {
     return normalizeFirms(typeof raw === "string" ? raw : "");
