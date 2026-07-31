@@ -91,7 +91,7 @@ body,
   border: none;
   cursor: pointer;
   font-family: var(--mer-mono);
-  font-size: 10px;
+  font-size: 13px;
   letter-spacing: 0.2em;
   color: var(--mer-text);
 }
@@ -443,7 +443,7 @@ body,
   border-radius: 0;
   color: var(--mer-text-dim);
   font-family: var(--mer-mono);
-  font-size: 10px;
+  font-size: 13px;
   letter-spacing: 0.08em;
 }
 .mer-sev-seg .bp5-button:hover {
