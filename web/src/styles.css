@@ -1050,6 +1050,8 @@ body,
   opacity: 0.45;
 }
 .mer-domain-toggle.on { opacity: 1; color: #c6d0de; }
+.mer-domain-toggle.empty.on { opacity: 0.35; }
+.mer-domain-toggle.empty .mer-domain-dot { background: #3a424f !important; }
 .mer-domain-dot { width: 7px; height: 7px; border-radius: 50%; }
 
 .mer-feed-scroll { flex: 1; min-height: 0; overflow: auto; }
