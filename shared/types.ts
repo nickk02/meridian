@@ -29,7 +29,6 @@ export interface ObjectType {
 // scope is just a filter.
 export type Domain =
   | "environmental"
-  | "financial"
   | "political"
   | "conflict"
   | "transport"
@@ -39,8 +38,6 @@ export type Domain =
   | "space"
   | "health"
   | "energy"
-  | "cyber"
-  | "sports"
   | "civic"
   | "disaster"
   | "other";
