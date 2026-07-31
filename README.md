@@ -42,7 +42,7 @@ Feeds are pulled on a schedule and archived as raw JSON in R2, then normalized i
 
 ## The object model
 
-Every event normalizes to a typed object: `{ id, domain, lat, lon, timestamp, severity, source, source_url, fetched_at, confidence, properties }`, tagged with one of 16 domains (seismic, environmental, disaster, maritime, aviation, space, financial, conflict, cyber, energy, health, transport, sports, civic, political, other) plus country and admin-1 region. Domains and regions are first-class, so "scopes" (for example, Europe today, or global maritime and energy) are simply saved filters over the same data.
+Every event normalizes to a typed object: `{ id, domain, lat, lon, timestamp, severity, source, source_url, fetched_at, confidence, properties }`, tagged with one of 13 domains (seismic, environmental, disaster, maritime, aviation, space, conflict, energy, health, transport, civic, political, other) plus country and admin-1 region. Domains and regions are first-class, so "scopes" (for example, Europe today, or global maritime and energy) are simply saved filters over the same data.
 
 Spatio-temporally clustered events are folded into incidents: one anchor event plus the events that occur within a tight distance and time window of it, each member linked to the anchor with a stated basis. The cluster is anchor-radial by design, so an incident cannot sprawl across unrelated regions.
 
@@ -129,7 +129,7 @@ Not yet live, in build order:
 * Shared-entity and semantic correlation (Vectorize embeddings + Workers AI), beyond the spatio-temporal and cross-domain links shipping today.
 * Grounded event summaries via Workers AI, cited to sources, never invented.
 * Live-updating mode: new events animate onto the map as they arrive (a Durable Object WebSocket ticker, once sub-minute latency justifies leaving pure free-tier).
-* Additional official feeds across the financial, energy, health, and civic domains.
+* Additional official feeds across the energy, health, and civic domains.
 
 ## Scope and ethics
 
