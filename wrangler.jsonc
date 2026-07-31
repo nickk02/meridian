@@ -31,14 +31,14 @@
     {
       "binding": "DB",
       "database_name": "meridian-db",
-      "database_id": "09c82870-e556-4fce-9d34-d783d5131896",
+      "database_id": "YOUR_D1_DATABASE_ID",
       "migrations_dir": "migrations"
     }
   ],
 
   // Short-TTL feed cache.
   "kv_namespaces": [
-    { "binding": "CACHE", "id": "9f7b204879034bc8bb38c50b58444697" }
+    { "binding": "CACHE", "id": "YOUR_KV_NAMESPACE_ID" }
   ],
 
   // Raw upstream landing zone (Stage B): cron writes raw feed JSON here, the
