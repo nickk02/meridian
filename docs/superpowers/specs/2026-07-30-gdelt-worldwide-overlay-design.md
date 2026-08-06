@@ -1,6 +1,8 @@
 # Sub-project A: GDELT worldwide overlay
 
-Status: approved, ready for implementation plan.
+Status: deferred (2026-08-06). GDELT GEO 2.0 (`api.gdeltproject.org/api/v2/geo/geo`), the endpoint this whole design depends on, is dead: confirmed 404 over both HTTP and HTTPS, on the officially-documented example URLs from GDELT's own blog, not just the query this spec proposed. No deprecation notice exists anywhere; it just stopped answering. `api/v2/doc/doc` (GDELT DOC 2.0, used by sub-project C) still works and was verified live the same session.
+
+Not replacing GEO 2.0 with DOC 2.0 as a stand-in for this sub-project: DOC 2.0 only carries the publishing outlet's country, not the location the article is about, so it would silently reintroduce the exact "misleading dot" problem this spec's own correction (see below) was written to fix. Conflict, civic, and political stay empty for now. This joins WHO/ProMED, energy, and ReliefWeb as a research spike, not a committed feed, until a real worldwide geocoded source turns up.
 
 ## Standing rules (apply to all three sub-projects in this batch)
 
