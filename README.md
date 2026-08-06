@@ -2,7 +2,7 @@
 
 Connecting the world's events in real time.
 
-Meridian is an open-source global event-intelligence dashboard. It ingests live, official, public data feeds from around the world, resolves them into a durable ontology of typed objects, links those objects by what they share in space, time, and identity, and presents the result as a live map, a scoped event feed, and a link graph. Every object traces to its source with a timestamp and an honest confidence score. Correlations show the basis for the link and never assert causation.
+Meridian pulls live public feeds and turns them into typed events: a place, a time, a source. It links events that share space, time, or identity, and shows the result as a map, an event feed, and a link graph. Every object keeps its source and a confidence score that decays with age. Every link keeps its basis. Correlation is not causation, and Meridian doesn't pretend otherwise.
 
 It runs entirely on Cloudflare's free tier.
 
@@ -12,13 +12,15 @@ Live instance: https://meridian.calm-butterfly-4753.workers.dev
 
 ## What makes Meridian different
 
-Most "intelligence dashboards" are a map with dots. The dots appear, the dots disappear, and nothing connects them. Meridian's premise is the opposite: the value is not the dots, it is the connections between them, surfaced honestly.
+Most "intelligence dashboards" are a map with dots that appear and disappear and never connect to anything. The dots aren't the point here. The connections between them are, and every connection has to show its work.
 
-* Grounded, not fabricated. Every event carries its source, fetch time, and a confidence score that decays with age. A 37-day-old event reads as low-confidence because it is. Nothing is invented to look authoritative.
-* Correlation, never fake causation. When events are linked, the link records its basis (same-type spatio-temporal clusters and co-causal cross-domain co-occurrence today; shared-entity and semantic similarity on the roadmap) and a confidence. Meridian shows that events co-occurred and why they may be related. It never claims one caused another. That judgment is left to the analyst.
-* Real entity resolution. Aircraft resolve by ICAO hex, vessels by MMSI, places by country and gazetteer. The same real-world thing seen through different feeds becomes one entity, so the links between events actually mean something.
-* Official and public sources only. No surveillance of named private individuals. No network scanning. No scanner audio. No facial recognition. No license-plate data. Meridian is a tool for understanding the world from public, official, aggregate information, not for watching people or probing infrastructure.
-* Edge-native and free. The whole system runs on Cloudflare Workers, D1, KV, R2, and Cron, within the free tier. Vectorize and Workers AI are provisioned for the semantic-correlation and grounded-summary work on the roadmap.
+Nothing is invented to look authoritative. A 37-day-old event reads as low-confidence because it is: every object carries its source, fetch time, and a confidence score that decays with age. Same with links — a link records its basis (same-type spatio-temporal clustering and co-causal cross-domain co-occurrence today, shared-entity and semantic similarity on the roadmap) and a confidence, and it can only say events co-occurred and why they might be related. It never says one caused the other. That call is the analyst's, not the software's.
+
+Entity resolution is real, not cosmetic: aircraft resolve by ICAO hex, vessels by MMSI, places by country and gazetteer, so the same real-world thing seen through five different feeds collapses into one entity and the links between events actually mean something.
+
+Sources are official and public only. No surveillance of named individuals, no network scanning, no scanner audio, no facial recognition, no license-plate data. This reads the world from public records, not from watching people.
+
+It runs on Cloudflare's free tier — Workers, D1, KV, R2, Cron. Vectorize and Workers AI are already wired in for the semantic-correlation and grounded-summary work that's next.
 
 ## How it works
 
