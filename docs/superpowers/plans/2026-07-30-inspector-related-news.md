@@ -14,7 +14,7 @@
 - No em-dashes anywhere: code, comments, commit messages, UI copy, docs.
 - File a PR. Do not merge. Do not deploy (`wrangler deploy`) without explicit approval.
 - "Verified" means observed proof: a live curl result, a real DOM measurement, a real KV read. Not source inspection, not a green typecheck alone.
-- Depends on the GDELT overlay plan's `/api/gdelt` route existing first (`worker/index.ts`), since this plan's route reuses its 429/`Retry-After`/non-200 handling pattern rather than reimplementing it. Do not start this plan until that one is merged or at least implemented in the same working tree.
+- No longer depends on the GDELT overlay plan. That plan is deferred (GEO 2.0 is dead, see `docs/superpowers/specs/2026-07-30-gdelt-worldwide-overlay-design.md`), so its `/api/gdelt` route does not exist. This plan's Task 2 implements its own 429/`Retry-After`/non-200 handling directly (the plan's code already shows it in full); it does not reuse anything from the other plan.
 - If GDELT DOC 2.0 does not behave as this plan expects once actually queried, stop and report blocked. Do not substitute a different news source and call the task done.
 - Verify against `npx wrangler dev` (remote mode, default `wrangler.jsonc`), not the production URL.
 - This plan is its own PR. Do not combine with the GDELT overlay or layout readability plans.
