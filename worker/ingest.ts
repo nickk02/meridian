@@ -17,6 +17,7 @@ import { cneosAdapter } from "./adapters/cneos";
 import { launchAdapter } from "./adapters/launch";
 import { firmsAdapter } from "./adapters/firms";
 import { capAlertHubAdapter } from "./adapters/capAlertHub";
+import { whoAdapter } from "./adapters/who";
 import { deriveLinks } from "./links";
 import { resolveEntities } from "./entities";
 import { countryAt } from "./geo/reverse";
@@ -34,6 +35,7 @@ const ADAPTERS = [
   firmsAdapter,
   usgsSigAdapter,
   capAlertHubAdapter,
+  whoAdapter,
 ];
 
 // Feeds that only run on the gated (hourly) cycle, to bound their write cost.
@@ -58,13 +60,14 @@ const SOURCE_DOMAIN: Record<string, Domain> = {
   firms: "environmental",
   usgs_sig: "seismic",
   cap_alerthub: "environmental",
+  who: "health",
 };
 
 // Static per-source reliability for the confidence score (Stage D).
 const RELIABILITY: Record<string, number> = {
   usgs: 0.98, usgs_sig: 0.98, nws: 0.97, nhc: 0.97, nifc: 0.95, eonet: 0.95,
   gdacs: 0.95, cneos: 0.95, launchlibrary: 0.9, cap_alerthub: 0.9,
-  airplanes: 0.85, digitraffic: 0.85, firms: 0.8,
+  airplanes: 0.85, digitraffic: 0.85, firms: 0.8, who: 0.92,
 };
 
 // Fallback source endpoint when a feed item has no per-event URL.
@@ -82,6 +85,7 @@ const SOURCE_URL: Record<string, string> = {
   launchlibrary: "https://thespacedevs.com/llapi",
   firms: "https://firms.modaps.eosdis.nasa.gov/",
   cap_alerthub: "https://alerthub.ifrc.org/",
+  who: "https://www.who.int/emergencies/disease-outbreak-news",
 };
 
 // confidence = reliability x recency. Recency decays linearly over a week to a
