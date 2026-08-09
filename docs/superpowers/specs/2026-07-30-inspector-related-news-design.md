@@ -1,6 +1,6 @@
 # Sub-project C: Inspector related news
 
-Status: approved, ready for implementation plan. Depends on sub-project A's GDELT-calling plumbing (429 handling, KV caching pattern for a GDELT proxy route). Sequence after A.
+Status: deferred (2026-08-08). GDELT DOC 2.0 (`api.gdeltproject.org/api/v2/doc/doc`) responded 200 with real data earlier in the session, then went into a persistent 429 for this environment's IP that did not clear after 24+ hours across repeated conservative retries. That is not a rate-limit window, it is a block. Deferred alongside sub-project A (GDELT overlay, dead GEO 2.0 endpoint) rather than built against an API this environment cannot reliably reach. Revisit if the block clears, Nick gets GDELT to grant this IP/project higher-traffic access (kalev.leetaru5@gmail.com, verified as GDELT's actual founder), or a different news source is chosen.
 
 ## Standing rules
 
