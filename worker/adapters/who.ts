@@ -47,6 +47,9 @@ const COUNTRY_TO_ISO3: Record<string, string> = {
   "Chad": "TCD",
   "Niger": "NER",
   "Mali": "MLI",
+  "Papua New Guinea": "PNG",
+  "Equatorial Guinea": "GNQ",
+  "Guinea-Bissau": "GNB",
   "Guinea": "GIN",
   "Liberia": "LBR",
   "Sierra Leone": "SLE",
@@ -65,8 +68,15 @@ const COUNTRY_TO_ISO3: Record<string, string> = {
   "United Kingdom": "GBR",
 };
 
+// Longest name first, so "Papua New Guinea" matches before the shorter
+// "Guinea" that is also a substring of it (same risk for Guinea-Bissau and
+// Equatorial Guinea). Sorted once at module load, not per call.
+const COUNTRY_ENTRIES = Object.entries(COUNTRY_TO_ISO3).sort(
+  (a, b) => b[0].length - a[0].length,
+);
+
 function findCountry(title: string): string | undefined {
-  for (const [name, iso3] of Object.entries(COUNTRY_TO_ISO3)) {
+  for (const [name, iso3] of COUNTRY_ENTRIES) {
     if (title.includes(name)) return iso3;
   }
   return undefined;
