@@ -25,6 +25,7 @@ waves; this list grows with them.
 | Launch Library | space | The Space Devs | 0.90 | thespacedevs.com/llapi | Public API, attribution |
 | ADS-B aircraft | aviation | airplanes.live | 0.85 | airplanes.live | Public, non-commercial use |
 | Digitraffic AIS | maritime | Fintraffic (Finnish Transport) | 0.85 | digitraffic.fi | CC BY 4.0 |
+| WHO Disease Outbreak News | health | World Health Organization | 0.92 | who.int/api/news | Official, public |
 
 ## Notes
 
