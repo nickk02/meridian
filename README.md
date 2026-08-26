@@ -8,8 +8,6 @@ It runs entirely on Cloudflare's free tier.
 
 <!-- ![Meridian](docs/screenshot.png) screenshot/GIF of the globe + feed, to be added once the cartography polish lands -->
 
-Live instance: https://meridian.calm-butterfly-4753.workers.dev
-
 ## What makes Meridian different
 
 Most "intelligence dashboards" are a map with dots that appear and disappear and never connect to anything. The dots aren't the point here. The connections between them are, and every connection has to show its work.
