@@ -13,6 +13,9 @@ dist/
 *.cf-token
 .cf-token
 
+# Real D1/KV resource ids for deploy, never committed
+wrangler.prod.local.jsonc
+
 # Claude / agent artifacts, never committed
 .remember/
 .claude/

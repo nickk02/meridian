@@ -116,7 +116,7 @@ npm run dev        # wrangler dev (local config): serves the SPA and the API tog
 
 ## Deploy
 
-Pushing to `main` triggers Cloudflare Workers Builds: `npm ci && npm run build`, then deploy, with D1 migrations applied automatically. D1, KV, R2, and the Vectorize index are created once by the operator; their bindings live in `wrangler.jsonc`. Secrets (`INGEST_TOKEN`, feed API keys) are set as Worker secrets, never committed.
+Pushing to `main` triggers Cloudflare Workers Builds: `npm ci && npm run build`, then deploy, with D1 migrations applied automatically. D1, KV, R2, and the Vectorize index are created once by the operator; their bindings live in `wrangler.jsonc`, which ships with placeholder resource ids. To deploy by hand (`npm run deploy`), copy `wrangler.jsonc` to `wrangler.prod.local.jsonc` (gitignored) and fill in your real `database_id` and KV `id` from `wrangler d1 list` / `wrangler kv namespace list`. Secrets (`INGEST_TOKEN`, feed API keys) are set as Worker secrets, never committed.
 
 ## Data sources
 
