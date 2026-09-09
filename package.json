@@ -23,7 +23,7 @@
     "@fontsource/jetbrains-mono": "^5.2.8",
     "d3-force": "^3.0.0",
     "hono": "^4.12.34",
-    "maplibre-gl": "^5.24.0",
+    "maplibre-gl": "^6.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "satellite.js": "^5.0.0",
