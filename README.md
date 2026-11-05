@@ -128,7 +128,7 @@ npx wrangler secret put INGEST_TOKEN     # optional: NASA_MAP_KEY, AISSTREAM_KEY
 
 Or connect your fork in the Cloudflare dashboard (Workers Builds) with build command `npm ci && npm run build`.
 
-**Maintainer deploys.** Copy `wrangler.jsonc` to `wrangler.prod.local.jsonc` (gitignored), fill in your real `database_id` and KV `id`, then `npm run deploy` and `npm run migrate:remote`.
+**Maintainer deploys.** Put your real ids in `.prod-ids.json` (gitignored): `{ "d1": "<database_id>", "kv": "<kv id>" }`. `npm run deploy` and `npm run migrate:remote` regenerate `wrangler.prod.local.jsonc` from `wrangler.jsonc` each time, so it never goes stale.
 
 ## Data sources
 
