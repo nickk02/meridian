@@ -42,3 +42,6 @@ AGENTS.md
 /verify-*.mjs
 /poll-*.mjs
 /probe*.mjs
+
+# Real resource ids for the maintainer deploy
+.prod-ids.json
