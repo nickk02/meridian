@@ -114,7 +114,21 @@ npm run dev        # wrangler dev (local config): serves the SPA and the API tog
 
 ## Deploy
 
-Pushing to `main` triggers Cloudflare Workers Builds: `npm ci && npm run build`, then deploy, with D1 migrations applied automatically. D1, KV, R2, and the Vectorize index are created once by the operator; their bindings live in `wrangler.jsonc`, which ships with placeholder resource ids. To deploy by hand (`npm run deploy`), copy `wrangler.jsonc` to `wrangler.prod.local.jsonc` (gitignored) and fill in your real `database_id` and KV `id` from `wrangler d1 list` / `wrangler kv namespace list`. Secrets (`INGEST_TOKEN`, feed API keys) are set as Worker secrets, never committed.
+**Fork and deploy to your own Cloudflare account.** `wrangler.jsonc` ships without resource ids; wrangler creates the D1 database, KV namespace and R2 bucket in your account on first deploy.
+
+```
+npm ci
+npx wrangler login
+npx wrangler vectorize create meridian-events --dimensions=768 --metric=cosine
+npm run build
+npx wrangler deploy
+npx wrangler d1 migrations apply DB --remote
+npx wrangler secret put INGEST_TOKEN     # optional: NASA_MAP_KEY, AISSTREAM_KEY
+```
+
+Or connect your fork in the Cloudflare dashboard (Workers Builds) with build command `npm ci && npm run build`.
+
+**Maintainer deploys.** Put your real ids in `.prod-ids.json` (gitignored): `{ "d1": "<database_id>", "kv": "<kv id>" }`. `npm run deploy` and `npm run migrate:remote` regenerate `wrangler.prod.local.jsonc` from `wrangler.jsonc` each time, so it never goes stale.
 
 ## Data sources
 

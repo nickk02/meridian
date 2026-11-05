@@ -90,7 +90,7 @@ app.get("/api/tle", async (c) => {
     const parts = await Promise.all(
       groups.map((g) =>
         fetch(`https://celestrak.org/NORAD/elements/gp.php?GROUP=${g}&FORMAT=tle`, {
-          headers: { "user-agent": "meridian-cop (github.com/nickk02/meridian)" },
+          headers: { "user-agent": "meridian-cop" },
         }).then((r) => (r.ok ? r.text() : "")),
       ),
     );

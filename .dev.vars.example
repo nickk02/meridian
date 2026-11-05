@@ -1,0 +1,4 @@
+# Copy to .dev.vars for local dev. For production use `wrangler secret put <NAME>`.
+INGEST_TOKEN=change-me          # guards /api/ingest/run and other manual routes
+NASA_MAP_KEY=                   # optional, NASA FIRMS fire layer
+AISSTREAM_KEY=                  # optional, global AIS vessel layer (aisstream.io)

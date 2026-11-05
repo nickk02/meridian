@@ -80,7 +80,7 @@ export const firmsAdapter: Adapter = {
     const key = keys?.["NASA_MAP_KEY"];
     if (!key) return "";
     const r = await fetch(`${FIRMS_BASE}/${key}/VIIRS_SNPP_NRT/world/1`, {
-      headers: { "user-agent": "meridian-cop (github.com/nickk02/meridian)" },
+      headers: { "user-agent": "meridian-cop" },
     });
     if (!r.ok) throw new Error(`FIRMS returned ${r.status}: ${await r.text()}`);
     const text = await r.text();

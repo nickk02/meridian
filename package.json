@@ -7,9 +7,9 @@
     "dev": "wrangler dev --config wrangler.local.jsonc",
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
-    "deploy": "wrangler deploy --config wrangler.prod.local.jsonc",
+    "deploy": "node tools/gen-prod-config.mjs && wrangler deploy --config wrangler.prod.local.jsonc",
     "migrate:local": "wrangler d1 migrations apply DB --config wrangler.local.jsonc --local",
-    "migrate:remote": "wrangler d1 migrations apply meridian-db --remote"
+    "migrate:remote": "node tools/gen-prod-config.mjs && wrangler d1 migrations apply DB --remote --config wrangler.prod.local.jsonc"
   },
   "dependencies": {
     "@blueprintjs/core": "^5.16.0",
