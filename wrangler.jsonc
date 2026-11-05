@@ -26,19 +26,23 @@
     "crons": ["*/15 * * * *"]
   },
 
+  // Resource ids are intentionally omitted: `wrangler deploy` (4.45+) creates
+  // the D1 database, KV namespace and R2 bucket in the deploying account and
+  // binds them. The Vectorize index is the one thing created by hand:
+  //   npx wrangler vectorize create meridian-events --dimensions=768 --metric=cosine
+
   // The ontology database.
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "meridian-db",
-      "database_id": "YOUR_D1_DATABASE_ID",
       "migrations_dir": "migrations"
     }
   ],
 
   // Short-TTL feed cache.
   "kv_namespaces": [
-    { "binding": "CACHE", "id": "YOUR_KV_NAMESPACE_ID" }
+    { "binding": "CACHE" }
   ],
 
   // Raw upstream landing zone (Stage B): cron writes raw feed JSON here, the
